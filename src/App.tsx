@@ -512,7 +512,11 @@ export function App() {
               </div>
               {bprResult.isComposite && (
                 <div class="bpr-composite-detail">
-                  Composite PR: {bprResult.maxPr} (dom. {bprResult.domesticPr} / non-dom. {bprResult.nonDomesticPr})
+                  <div>Indicative PR: {bprResult.maxPr} (permitted dom. {bprResult.domesticPr} / non-dom. {bprResult.nonDomesticPr})</div>
+                  <div>SC: {(bprResult.maxSc * 100).toFixed(1)}% (dom. {((bprResult.domesticSc ?? 0) * 100).toFixed(1)}% / non-dom. {((bprResult.nonDomesticSc ?? 0) * 100).toFixed(1)}%)</div>
+                  {bprResult.compositeNote && (
+                    <div class="bpr-composite-note">{bprResult.compositeNote}</div>
+                  )}
                 </div>
               )}
             </div>

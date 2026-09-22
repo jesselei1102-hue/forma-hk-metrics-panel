@@ -294,10 +294,12 @@ export function ProfileEditor({ profile, onSave, onCancel, isNew = false }: Prop
             </div>
             {formData.useType === 'composite' && (
               <div class="bpr-composite-info">
-                Composite PR = (domestic% × PR_dom) + (non-domestic% × PR_nonDom) per reg 21(2).
+                <strong>Note:</strong> Reg 21(2) constrains domestic PR based on actual non-domestic usage — 
+                not a simple weighted average. The panel shows an indicative blend for early design; 
+                actual compliance depends on the specific GFA split at BA submission.
                 {formData.domesticShare === null || formData.domesticShare === undefined
-                  ? ' Set domestic share % above to calculate.'
-                  : ` Using ${Math.round((formData.domesticShare ?? 0) * 100)}% domestic / ${Math.round((1 - (formData.domesticShare ?? 0)) * 100)}% non-domestic.`}
+                  ? ' Set domestic share % for indicative blend.'
+                  : ` Indicative: ${Math.round((formData.domesticShare ?? 0) * 100)}% dom. / ${Math.round((1 - (formData.domesticShare ?? 0)) * 100)}% non-dom.`}
               </div>
             )}
           </div>

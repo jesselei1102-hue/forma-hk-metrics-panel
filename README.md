@@ -17,7 +17,10 @@ Your existing profile limits from OZP zoning, lease conditions, or project brief
 
 ### B(P)R First Schedule Limits (Cap. 123F)
 Cap. 123F Building (Planning) Regulations First Schedule defines **statutory intensity ceilings** based on:
-- **Site Class** (A, B, or C per reg 18A)
+- **Site Class** (per reg 18A — number of streets the site abuts):
+  - **Class A**: 1 street (least permissive for domestic)
+  - **Class B**: 2 streets
+  - **Class C**: 3+ streets (most permissive)
 - **Use Type** (domestic or non-domestic)
 - **Building Height** in metres (NOT mPD)
 
@@ -43,19 +46,30 @@ The panel can derive building height for First Schedule lookup in two ways:
 
 ### Composite Buildings (reg 21(2))
 
-For composite buildings (mixed domestic/non-domestic use), the panel calculates weighted limits:
+For composite buildings (mixed domestic/non-domestic use), **reg 21(2) constrains the domestic PR** based on how much non-domestic PR is actually used:
 
 ```
-PR_composite = (domesticShare × PR_domestic) + ((1 - domesticShare) × PR_nonDomestic)
-SC_composite = min(SC_domestic, SC_nonDomestic)
+PR_dom_max = (PR_nd_permitted - PR_nd_actual) × (PR_dom_permitted / PR_nd_permitted)
 ```
+
+This is **NOT** a simple weighted average. The actual permissible domestic PR depends on how much of the non-domestic allowance is consumed.
+
+**For early design** (before final GFA split is known), the panel shows:
+- Permitted domestic PR and non-domestic PR from the schedule
+- An **indicative blended PR** using the entered domestic share %
+- The stricter SC (min of domestic/non-domestic)
+
+This indicative blend is clearly labeled as **not the reg 21(2) formula** — actual compliance depends on the specific GFA split at BA submission.
 
 To use composite mode:
 1. Set **Use Type** to "Composite (mixed)"
-2. Enter **Domestic GFA Share %** (0-100)
-3. The panel calculates weighted PR and uses the stricter SC
+2. Enter **Domestic GFA Share %** (0-100) for indicative blend
+3. Review both permitted PR values and the indicative total
 
-Example: 60% domestic at Class A >61m → PR = 0.6×8 + 0.4×15 = 10.8
+Example: Class A >61m with 60% domestic:
+- Permitted PR_dom = 8.0, PR_nd = 15
+- Indicative blend = 0.6×8 + 0.4×15 = 10.8
+- SC = min(33.33%, 60%) = 33.33%
 
 ### Important Notes
 

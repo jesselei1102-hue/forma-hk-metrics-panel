@@ -739,6 +739,13 @@ body {
   color: #7c3aed;
 }
 
+.bpr-composite-note {
+  margin-top: 4px;
+  font-size: 9px;
+  color: #9333ea;
+  font-style: italic;
+}
+
 .bpr-composite-info {
   margin-top: 8px;
   padding: 6px 8px;
