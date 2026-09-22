@@ -134,37 +134,14 @@ export async function fetchAreaMetrics(): Promise<AreaMetricsData> {
       ? extractValue(siteMetrics.builtInMetrics.siteArea?.value)
       : null;
 
-    const gfaMetric = buildingMetrics.builtInMetrics.grossFloorArea;
-    let gfa: number | null = null;
-    let functionBreakdown: FunctionGfa[] = [];
-
-    if (gfaMetric.functionBreakdown && gfaMetric.functionBreakdown.length > 0) {
-      const extracted = extractFunctionBreakdown(gfaMetric.functionBreakdown);
-      gfa = extracted.total;
-      functionBreakdown = extracted.functions;
-    }
-
-    if (gfa === null) {
-      const gfaValue = (gfaMetric as { value?: number | 'UNABLE_TO_CALCULATE' }).value;
-      gfa = extractValue(gfaValue);
-    }
-
+    const { total: gfa, functions: functionBreakdown } = extractFunctionBreakdown(
+      buildingMetrics.builtInMetrics.grossFloorArea.functionBreakdown
+    );
     const buildingCoverage = extractValue(buildingMetrics.builtInMetrics.buildingCoverage?.value);
 
-    const rawCustomMetrics = (buildingMetrics as { customMetrics?: RawCustomMetric[] }).customMetrics;
-    const customMetrics = extractCustomMetrics(rawCustomMetrics);
-
-    console.debug('[forma-api] fetchAreaMetrics debug:', {
-      sitePaths: sitePaths.length,
-      buildingPaths: buildingPaths.length,
-      siteArea,
-      gfa,
-      functionBreakdownCount: functionBreakdown.length,
-      buildingCoverage,
-      customMetricsCount: customMetrics.length,
-      rawGfaMetric: gfaMetric,
-      rawCustomMetric0Keys: rawCustomMetrics?.[0] ? Object.keys(rawCustomMetrics[0]) : null,
-    });
+    const customMetrics = extractCustomMetrics(
+      (buildingMetrics as { customMetrics?: RawCustomMetric[] }).customMetrics
+    );
 
     return {
       siteArea,
