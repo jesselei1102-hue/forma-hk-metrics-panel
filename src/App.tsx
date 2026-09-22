@@ -11,7 +11,6 @@ import { fetchAreaMetrics, isFormaEnvironment } from './forma-api';
 import { calculateMetrics } from './metrics';
 import { MetricsTable } from './components/MetricsTable';
 import { ProfileEditor } from './components/ProfileEditor';
-import { Disclaimer } from './components/Disclaimer';
 
 export function App() {
   const [profiles, setProfiles] = useState<Profile[]>(() => loadProfiles());
@@ -121,8 +120,6 @@ export function App() {
         <h1 class="title">HK Metrics Panel</h1>
       </div>
 
-      <Disclaimer />
-
       <div class="profile-section">
         <div class="profile-row">
           <select class="profile-select" value={selectedProfileId} onChange={handleProfileChange}>
@@ -148,7 +145,7 @@ export function App() {
         <div class="height-input-section">
           {selectedProfile.towers.map((tower) => (
             <div class="height-input-row" key={tower.id}>
-              <label>{tower.id}:</label>
+              <label>{tower.id} mPD</label>
               <input
                 type="number"
                 step="0.1"
@@ -156,7 +153,6 @@ export function App() {
                 onInput={(e) => handleTowerHeightChange(tower.id, (e.target as HTMLInputElement).value)}
                 placeholder={`≤${tower.maxBhMpd}`}
               />
-              <span>mPD</span>
             </div>
           ))}
         </div>
