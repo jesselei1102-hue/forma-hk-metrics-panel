@@ -27,16 +27,53 @@ function extractFunctionBreakdown(
   return { total: hasValue ? sum : null, functions };
 }
 
-type SdkCustomMetric = {
+type RawCustomMetric = Record<string, unknown> & {
   id: string;
-  name: string;
+  name?: string;
+  displayName?: string;
+  label?: string;
+  title?: string;
   unitOfMeasurement?: string;
   functionBreakdown?: Array<{ value: number | 'UNABLE_TO_CALCULATE' }>;
   value?: number | 'UNABLE_TO_CALCULATE';
 };
 
+function looksLikeFormula(str: string): boolean {
+  if (/[A-Za-z_]+\s*[/*+]\s*[A-Za-z_]/.test(str)) return true;
+  const trimmed = str.trim();
+  if (trimmed.includes('/') || trimmed.includes('*') || trimmed.includes('+')) {
+    if (/^[A-Za-z0-9_\s/*+()-]+$/.test(trimmed)) return true;
+  }
+  return false;
+}
+
+function pickDisplayName(metric: RawCustomMetric): string {
+  const getString = (key: string): string | undefined => {
+    const val = metric[key];
+    return typeof val === 'string' && val.trim() ? val.trim() : undefined;
+  };
+
+  const displayName = getString('displayName');
+  if (displayName) return displayName;
+
+  const label = getString('label');
+  if (label) return label;
+
+  const title = getString('title');
+  if (title) return title;
+
+  const name = getString('name');
+  const id = getString('id');
+
+  if (name && !looksLikeFormula(name)) return name;
+  if (id && !looksLikeFormula(id)) return id;
+  if (name) return name;
+
+  return 'Custom metric';
+}
+
 function extractCustomMetrics(
-  customMetrics: SdkCustomMetric[] | undefined
+  customMetrics: RawCustomMetric[] | undefined
 ): CustomMetricData[] {
   if (!customMetrics || customMetrics.length === 0) return [];
   const result: CustomMetricData[] = [];
@@ -56,7 +93,7 @@ function extractCustomMetrics(
     } else if (metric.value !== undefined) {
       actual = extractValue(metric.value);
     }
-    result.push({ id: metric.id, name: metric.name, actual });
+    result.push({ id: metric.id, name: pickDisplayName(metric), actual });
   }
   return result;
 }
@@ -109,7 +146,7 @@ export async function fetchAreaMetrics(): Promise<AreaMetricsData> {
     const buildingCoverage = extractValue(buildingMetrics.builtInMetrics.buildingCoverage?.value);
 
     const customMetrics = extractCustomMetrics(
-      (buildingMetrics as { customMetrics?: SdkCustomMetric[] }).customMetrics
+      (buildingMetrics as { customMetrics?: RawCustomMetric[] }).customMetrics
     );
 
     return {
