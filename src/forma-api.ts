@@ -23,32 +23,37 @@ function sumFunctionBreakdown(
   return hasValue ? sum : null;
 }
 
-function extractGrossFloorArea(gfa: {
-  value?: number | 'UNABLE_TO_CALCULATE';
-  functionBreakdown?: Array<{ value: number | 'UNABLE_TO_CALCULATE' }>;
-}): number | null {
-  const directValue = extractValue(gfa.value);
-  if (directValue !== null) {
-    return directValue;
-  }
-  return sumFunctionBreakdown(gfa.functionBreakdown);
-}
-
 export async function fetchAreaMetrics(): Promise<AreaMetricsData> {
   try {
-    const sitePaths = await Forma.geometry.getPathsByCategory({
-      category: 'site_limit',
-    });
+    const [sitePaths, buildingPaths] = await Promise.all([
+      Forma.geometry.getPathsByCategory({ category: 'site_limit' }),
+      Forma.geometry.getPathsByCategory({ category: 'building' }),
+    ]);
 
-    const metrics = await Forma.areaMetrics.calculate({
-      paths: sitePaths.length > 0 ? sitePaths : undefined,
-    });
+    const siteMetricsPromise =
+      sitePaths.length > 0
+        ? Forma.areaMetrics.calculate({ paths: sitePaths })
+        : Promise.resolve(null);
 
-    const gfa = extractGrossFloorArea(metrics.builtInMetrics.grossFloorArea);
-    const buildingCoverage = extractValue(metrics.builtInMetrics.buildingCoverage?.value);
+    const buildingMetricsPromise =
+      buildingPaths.length > 0
+        ? Forma.areaMetrics.calculate({ paths: buildingPaths })
+        : Forma.areaMetrics.calculate({});
+
+    const [siteMetrics, buildingMetrics] = await Promise.all([
+      siteMetricsPromise,
+      buildingMetricsPromise,
+    ]);
+
+    const siteArea = siteMetrics
+      ? extractValue(siteMetrics.builtInMetrics.siteArea?.value)
+      : null;
+
+    const gfa = sumFunctionBreakdown(buildingMetrics.builtInMetrics.grossFloorArea.functionBreakdown);
+    const buildingCoverage = extractValue(buildingMetrics.builtInMetrics.buildingCoverage?.value);
 
     return {
-      siteArea: extractValue(metrics.builtInMetrics.siteArea?.value),
+      siteArea,
       grossFloorArea: gfa,
       buildingCoverage: buildingCoverage,
     };

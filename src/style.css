@@ -25,9 +25,10 @@ body {
 }
 
 #app {
-  padding: 12px;
-  min-width: 420px;
-  max-width: 480px;
+  padding: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .panel {
@@ -51,10 +52,10 @@ body {
 .profile-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
+  gap: 6px;
+  padding: 8px;
   background: var(--color-bg-secondary);
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--color-border);
 }
 
@@ -66,10 +67,11 @@ body {
 
 .profile-select {
   flex: 1;
-  padding: 8px 12px;
+  min-width: 0;
+  padding: 6px 8px;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: 4px;
+  font-size: 12px;
   background: var(--color-bg);
   cursor: pointer;
 }
@@ -80,13 +82,14 @@ body {
 }
 
 .btn {
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--color-bg);
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
   transition: background 0.2s;
+  flex-shrink: 0;
 }
 
 .btn:hover {
@@ -113,22 +116,39 @@ body {
 .metrics-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
-  table-layout: auto;
+  font-size: 11px;
+  table-layout: fixed;
 }
 
 .metrics-table th,
 .metrics-table td {
-  padding: 8px 6px;
+  padding: 6px 4px;
   text-align: left;
   border-bottom: 1px solid var(--color-border);
-  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.metrics-table td:first-child,
-.metrics-table th:first-child {
-  white-space: normal;
-  min-width: 100px;
+.metrics-table th:first-child,
+.metrics-table td:first-child {
+  width: 28%;
+}
+
+.metrics-table th:nth-child(2),
+.metrics-table td:nth-child(2),
+.metrics-table th:nth-child(3),
+.metrics-table td:nth-child(3) {
+  width: 22%;
+}
+
+.metrics-table th:nth-child(4),
+.metrics-table td:nth-child(4) {
+  width: 16%;
+}
+
+.metrics-table th:nth-child(5),
+.metrics-table td:nth-child(5) {
+  width: 12%;
 }
 
 .metrics-table th {
@@ -319,9 +339,9 @@ body {
 }
 
 .height-input-section {
-  padding: 12px;
+  padding: 8px;
   background: var(--color-bg-secondary);
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--color-border);
 }
 
@@ -338,11 +358,11 @@ body {
 }
 
 .height-input-row input {
-  width: 100px;
-  padding: 6px 10px;
+  width: 80px;
+  padding: 5px 8px;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: 4px;
+  font-size: 12px;
 }
 
 .height-input-row span {
