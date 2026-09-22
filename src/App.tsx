@@ -61,7 +61,7 @@ const BUILTIN_METRIC_NAMES = [
   'Plot Ratio',
   'Site Coverage',
   'Office GFA',
-  'Commercial GFA',
+  'Retail GFA',
   'POS Area',
 ];
 

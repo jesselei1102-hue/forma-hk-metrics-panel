@@ -5,7 +5,7 @@ export interface TowerLimit {
 
 export interface MixTarget {
   officeShare: number;
-  commercialShare: number;
+  retailShare: number;
 }
 
 export interface Profile {

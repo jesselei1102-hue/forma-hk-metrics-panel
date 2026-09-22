@@ -26,22 +26,22 @@ function matchesOffice(name: string): boolean {
   return lower.includes('office') || lower.includes('办公');
 }
 
-function matchesCommercial(name: string): boolean {
+function matchesRetail(name: string): boolean {
   const lower = name.toLowerCase();
   return lower.includes('retail') || lower.includes('commercial') || lower.includes('零售') || lower.includes('商业');
 }
 
-function extractMixGfa(breakdown: FunctionGfa[]): { office: number | null; commercial: number | null } {
+function extractMixGfa(breakdown: FunctionGfa[]): { office: number | null; retail: number | null } {
   let office: number | null = null;
-  let commercial: number | null = null;
+  let retail: number | null = null;
   for (const fn of breakdown) {
     if (matchesOffice(fn.functionName)) {
       office = (office ?? 0) + fn.value;
-    } else if (matchesCommercial(fn.functionName)) {
-      commercial = (commercial ?? 0) + fn.value;
+    } else if (matchesRetail(fn.functionName)) {
+      retail = (retail ?? 0) + fn.value;
     }
   }
-  return { office, commercial };
+  return { office, retail };
 }
 
 export function calculateMetrics(
@@ -135,11 +135,11 @@ export function calculateMetrics(
   }
 
   if (profile.useMix || profile.mixTarget) {
-    const { office: officeGfa, commercial: commercialGfa } = extractMixGfa(areaData.functionBreakdown);
+    const { office: officeGfa, retail: retailGfa } = extractMixGfa(areaData.functionBreakdown);
     const mixTarget = profile.mixTarget;
 
     const officeTargetGfa = mixTarget && gfaActual !== null ? gfaActual * mixTarget.officeShare : null;
-    const commercialTargetGfa = mixTarget && gfaActual !== null ? gfaActual * mixTarget.commercialShare : null;
+    const retailTargetGfa = mixTarget && gfaActual !== null ? gfaActual * mixTarget.retailShare : null;
 
     const officeUsage =
       officeGfa !== null && officeTargetGfa !== null && officeTargetGfa > 0
@@ -153,16 +153,16 @@ export function calculateMetrics(
       status: calculateMixStatus(officeUsage, thresholds),
     });
 
-    const commercialUsage =
-      commercialGfa !== null && commercialTargetGfa !== null && commercialTargetGfa > 0
-        ? (commercialGfa / commercialTargetGfa) * 100
+    const retailUsage =
+      retailGfa !== null && retailTargetGfa !== null && retailTargetGfa > 0
+        ? (retailGfa / retailTargetGfa) * 100
         : null;
     metrics.push({
-      name: 'Commercial GFA',
-      actual: commercialGfa,
-      limit: commercialTargetGfa,
-      usagePercent: commercialUsage,
-      status: calculateMixStatus(commercialUsage, thresholds),
+      name: 'Retail GFA',
+      actual: retailGfa,
+      limit: retailTargetGfa,
+      usagePercent: retailUsage,
+      status: calculateMixStatus(retailUsage, thresholds),
     });
   }
 
