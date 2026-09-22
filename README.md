@@ -2,11 +2,6 @@
 
 A Forma Site Design extension that displays early/pre-design planning metrics for Hong Kong developments. The panel reads Forma `areaMetrics`, compares against hand-entered profile limits, and shows traffic-light status with deltas.
 
-> **Disclaimer / 免责声明**
->
-> 「早期设计辅助，非法定合规检查。」
->
-> Early design aid — not a statutory compliance check.
 
 ## Features
 
