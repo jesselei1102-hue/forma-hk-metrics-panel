@@ -117,7 +117,7 @@ export function App() {
   return (
     <div class="panel">
       <div class="header">
-        <h1 class="title">HK Metrics Panel</h1>
+        <h1 class="title">Design Metric Track</h1>
       </div>
 
       <div class="profile-section">
