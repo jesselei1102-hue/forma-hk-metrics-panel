@@ -1,4 +1,4 @@
-import type { MetricRow, Profile, AreaMetricsData, StatusThresholds } from './types';
+import type { MetricRow, Profile, AreaMetricsData, StatusThresholds, TowerHeights, FunctionGfa, MixTargetEntry } from './types';
 
 function calculateStatus(
   usagePercent: number | null,
@@ -10,11 +10,40 @@ function calculateStatus(
   return 'red';
 }
 
+function calculateMixStatus(
+  usagePercent: number | null,
+  thresholds: StatusThresholds
+): 'green' | 'yellow' | 'red' | 'none' {
+  if (usagePercent === null) return 'none';
+  const deviation = Math.abs(usagePercent - 100);
+  if (deviation <= 5) return 'green';
+  if (thresholds.yellowEnabled && deviation <= 10) return 'yellow';
+  return 'red';
+}
+
+function matchesMixTarget(functionName: string, matchTokens: string[]): boolean {
+  const lower = functionName.toLowerCase();
+  return matchTokens.some((token) => lower.includes(token.toLowerCase()));
+}
+
+function calculateMixTargetActual(
+  breakdown: FunctionGfa[],
+  target: MixTargetEntry
+): number | null {
+  let sum: number | null = null;
+  for (const fn of breakdown) {
+    if (matchesMixTarget(fn.functionName, target.match)) {
+      sum = (sum ?? 0) + fn.value;
+    }
+  }
+  return sum;
+}
+
 export function calculateMetrics(
   areaData: AreaMetricsData,
   profile: Profile,
   thresholds: StatusThresholds,
-  manualRoofMpd: number | null
+  towerHeights: TowerHeights
 ): MetricRow[] {
   const metrics: MetricRow[] = [];
 
@@ -26,11 +55,10 @@ export function calculateMetrics(
       : null;
   metrics.push({
     name: 'Site Area',
-    nameZh: '地盘面积',
     actual: siteAreaActual,
     limit: siteLimit,
     usagePercent: siteUsage,
-    status: 'none',
+    status: calculateStatus(siteUsage, thresholds),
   });
 
   const gfaActual = areaData.grossFloorArea;
@@ -41,7 +69,6 @@ export function calculateMetrics(
       : null;
   metrics.push({
     name: 'GFA Total',
-    nameZh: '总建筑面积',
     actual: gfaActual,
     limit: gfaLimit,
     usagePercent: gfaUsage,
@@ -60,7 +87,6 @@ export function calculateMetrics(
       : null;
   metrics.push({
     name: 'Plot Ratio',
-    nameZh: '地积比率',
     actual: prActual,
     limit: prLimit,
     usagePercent: prUsage,
@@ -79,27 +105,66 @@ export function calculateMetrics(
       : null;
   metrics.push({
     name: 'Site Coverage',
-    nameZh: '建筑覆盖率',
     actual: scActual,
     limit: coverageLimit,
     usagePercent: scUsage,
     status: calculateStatus(scUsage, thresholds),
   });
 
-  if (profile.towers.length > 0) {
-    const primaryTower = profile.towers[0];
-    const heightLimit = primaryTower.maxBhMpd;
+  for (const tower of profile.towers) {
+    const heightStr = towerHeights[tower.id];
+    const heightActual = heightStr ? parseFloat(heightStr) : null;
+    const parsedHeight = heightActual !== null && Number.isFinite(heightActual) ? heightActual : null;
+    const heightLimit = tower.maxBhMpd;
     const heightUsage =
-      manualRoofMpd !== null && heightLimit > 0
-        ? (manualRoofMpd / heightLimit) * 100
+      parsedHeight !== null && heightLimit > 0
+        ? (parsedHeight / heightLimit) * 100
         : null;
     metrics.push({
-      name: `Height (${primaryTower.id})`,
-      nameZh: `高度 (${primaryTower.id})`,
-      actual: manualRoofMpd,
+      name: `Height (${tower.id})`,
+      actual: parsedHeight,
       limit: heightLimit,
       usagePercent: heightUsage,
       status: calculateStatus(heightUsage, thresholds),
+    });
+  }
+
+  if (profile.mixTargets && profile.mixTargets.length > 0) {
+    for (const target of profile.mixTargets) {
+      const actual = calculateMixTargetActual(areaData.functionBreakdown, target);
+      const limit = gfaActual !== null && target.share > 0 ? gfaActual * target.share : null;
+      const usage =
+        actual !== null && limit !== null && limit > 0
+          ? (actual / limit) * 100
+          : null;
+      metrics.push({
+        name: target.label,
+        actual,
+        limit,
+        usagePercent: usage,
+        status: calculateMixStatus(usage, thresholds),
+      });
+    }
+  }
+
+  if (profile.minPosM2 !== null && profile.minPosM2 !== undefined) {
+    metrics.push({
+      name: 'POS Area',
+      actual: null,
+      limit: profile.minPosM2,
+      usagePercent: null,
+      status: 'none',
+    });
+  }
+
+  for (const customMetric of areaData.customMetrics) {
+    metrics.push({
+      name: customMetric.name,
+      actual: customMetric.actual,
+      limit: null,
+      usagePercent: null,
+      status: 'none',
+      customMetricId: customMetric.id,
     });
   }
 

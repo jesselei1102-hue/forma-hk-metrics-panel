@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'preact/hooks';
-import type { Profile, TowerLimit } from '../types';
+import { useState, useEffect, useMemo } from 'preact/hooks';
+import type { Profile, TowerLimit, MixTargetEntry } from '../types';
 
 interface Props {
   profile: Profile;
@@ -24,6 +24,56 @@ export function ProfileEditor({ profile, onSave, onCancel, isNew = false }: Prop
     if (value === '' || value === null) return null;
     const num = parseFloat(value);
     return isNaN(num) ? null : num;
+  };
+
+  const handleMixTargetUpdate = (index: number, field: keyof MixTargetEntry, value: string | string[] | number) => {
+    const mixTargets = formData.mixTargets || [];
+    const updated = mixTargets.map((t, i) => {
+      if (i !== index) return t;
+      if (field === 'share') {
+        const percent = typeof value === 'number' ? value : parseFloat(value as string) || 0;
+        return { ...t, share: Math.max(0, Math.min(100, percent)) / 100 };
+      }
+      if (field === 'match') {
+        const matchArray = typeof value === 'string'
+          ? value.split(',').map((s) => s.trim()).filter(Boolean)
+          : value as string[];
+        return { ...t, match: matchArray };
+      }
+      return { ...t, [field]: value };
+    });
+    setFormData((prev) => ({ ...prev, mixTargets: updated }));
+  };
+
+  const handleAddMixTarget = () => {
+    const mixTargets = formData.mixTargets || [];
+    const newTarget: MixTargetEntry = {
+      id: `mix-${Date.now()}`,
+      label: 'New Mix Target',
+      match: [],
+      share: 0,
+    };
+    setFormData((prev) => ({ ...prev, mixTargets: [...mixTargets, newTarget] }));
+  };
+
+  const handleRemoveMixTarget = (index: number) => {
+    const mixTargets = formData.mixTargets || [];
+    setFormData((prev) => ({ ...prev, mixTargets: mixTargets.filter((_, i) => i !== index) }));
+  };
+
+  const mixTargetShareSum = useMemo(() => {
+    const targets = formData.mixTargets || [];
+    return targets.reduce((sum, t) => sum + t.share, 0);
+  }, [formData.mixTargets]);
+
+  const handleNormalizeMixTargets = () => {
+    const mixTargets = formData.mixTargets || [];
+    if (mixTargets.length === 0 || mixTargetShareSum === 0) return;
+    const normalized = mixTargets.map((t) => ({
+      ...t,
+      share: t.share / mixTargetShareSum,
+    }));
+    setFormData((prev) => ({ ...prev, mixTargets: normalized }));
   };
 
   const addTower = () => {
@@ -206,6 +256,63 @@ export function ProfileEditor({ profile, onSave, onCancel, isNew = false }: Prop
               <button type="button" class="btn" onClick={addTower}>
                 Add Tower
               </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Mix Targets (GFA Share)</label>
+            {(formData.mixTargets || []).map((target, index) => (
+              <div key={target.id} class="form-row" style={{ marginBottom: '8px', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1 }}>
+                  <input
+                    class="form-input"
+                    type="text"
+                    value={target.label}
+                    onInput={(e) => handleMixTargetUpdate(index, 'label', (e.target as HTMLInputElement).value)}
+                    placeholder="Label (e.g. Office GFA)"
+                    style={{ marginBottom: '4px' }}
+                  />
+                  <input
+                    class="form-input"
+                    type="text"
+                    value={target.match.join(', ')}
+                    onInput={(e) => handleMixTargetUpdate(index, 'match', (e.target as HTMLInputElement).value)}
+                    placeholder="Match keywords (comma-separated)"
+                    style={{ fontSize: '11px' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginTop: '4px' }}>
+                  <input
+                    class="form-input"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={Math.round(target.share * 100)}
+                    onInput={(e) => handleMixTargetUpdate(index, 'share', (e.target as HTMLInputElement).value)}
+                    style={{ width: '60px' }}
+                  />
+                  <span style={{ fontSize: '11px' }}>%</span>
+                  <button type="button" class="btn btn-icon" onClick={() => handleRemoveMixTarget(index)}>
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px' }}>
+              <button type="button" class="btn" onClick={handleAddMixTarget}>
+                + Add Mix Target
+              </button>
+              {Math.abs(mixTargetShareSum - 1) > 0.001 && (formData.mixTargets?.length ?? 0) > 0 && (
+                <>
+                  <span style={{ fontSize: '10px', color: '#9ca3af' }}>
+                    Sum: {Math.round(mixTargetShareSum * 100)}%
+                  </span>
+                  <button type="button" class="btn" onClick={handleNormalizeMixTargets}>
+                    Normalize
+                  </button>
+                </>
+              )}
             </div>
           </div>
 

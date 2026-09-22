@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'preact/hooks';
-import type { Profile, AreaMetricsData, StatusThresholds } from './types';
+import { useState, useEffect, useCallback, useMemo } from 'preact/hooks';
+import type { Profile, AreaMetricsData, StatusThresholds, TowerHeights, MetricRow, MixTargetEntry } from './types';
 import {
   loadProfiles,
   saveProfiles,
@@ -11,7 +11,65 @@ import { fetchAreaMetrics, isFormaEnvironment } from './forma-api';
 import { calculateMetrics } from './metrics';
 import { MetricsTable } from './components/MetricsTable';
 import { ProfileEditor } from './components/ProfileEditor';
-import { Disclaimer } from './components/Disclaimer';
+
+const VISIBILITY_STORAGE_KEY = 'forma-hk-metrics-visibility';
+const SEEN_CUSTOM_METRICS_KEY = 'forma-hk-metrics-seen-custom';
+
+type MetricVisibility = Record<string, boolean>;
+
+function loadVisibility(): MetricVisibility {
+  try {
+    const stored = localStorage.getItem(VISIBILITY_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveVisibility(visibility: MetricVisibility): void {
+  try {
+    localStorage.setItem(VISIBILITY_STORAGE_KEY, JSON.stringify(visibility));
+  } catch {
+    // localStorage unavailable
+  }
+}
+
+function loadSeenCustomMetrics(): Set<string> {
+  try {
+    const stored = localStorage.getItem(SEEN_CUSTOM_METRICS_KEY);
+    return new Set(stored ? JSON.parse(stored) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveSeenCustomMetrics(seen: Set<string>): void {
+  try {
+    localStorage.setItem(SEEN_CUSTOM_METRICS_KEY, JSON.stringify([...seen]));
+  } catch {
+    // localStorage unavailable
+  }
+}
+
+function getMetricKey(metric: MetricRow): string {
+  return metric.customMetricId ? `custom:${metric.customMetricId}` : `builtin:${metric.name}`;
+}
+
+const CORE_METRIC_NAMES = [
+  'Site Area',
+  'GFA Total',
+  'Plot Ratio',
+  'Site Coverage',
+  'POS Area',
+];
+
+function isCoreOrMixMetric(metric: MetricRow, mixTargetLabels: string[]): boolean {
+  if (metric.customMetricId) return false;
+  if (CORE_METRIC_NAMES.includes(metric.name)) return true;
+  if (metric.name.startsWith('Height (')) return true;
+  if (mixTargetLabels.includes(metric.name)) return true;
+  return false;
+}
 
 export function App() {
   const [profiles, setProfiles] = useState<Profile[]>(() => loadProfiles());
@@ -22,8 +80,12 @@ export function App() {
   const [isForma, setIsForma] = useState(false);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
-  const [manualRoofMpd, setManualRoofMpd] = useState<string>('');
+  const [towerHeights, setTowerHeights] = useState<TowerHeights>({});
   const [yellowEnabled, setYellowEnabled] = useState(true);
+  const [visibility, setVisibility] = useState<MetricVisibility>(() => loadVisibility());
+  const [seenCustomMetrics, setSeenCustomMetrics] = useState<Set<string>>(() => loadSeenCustomMetrics());
+  const [configExpanded, setConfigExpanded] = useState(false);
+  const [mixTargetsExpanded, setMixTargetsExpanded] = useState(false);
 
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId) || profiles[0];
 
@@ -47,6 +109,8 @@ export function App() {
           siteArea: null,
           grossFloorArea: null,
           buildingCoverage: null,
+          functionBreakdown: [],
+          customMetrics: [],
         });
         setError(
           'Not running inside Forma. Load this extension in Autodesk Forma to see live metrics.'
@@ -106,18 +170,146 @@ export function App() {
     setIsCreatingProfile(false);
   };
 
-  const parsedRoofMpd = manualRoofMpd ? parseFloat(manualRoofMpd) : null;
-  const metrics = areaMetrics
-    ? calculateMetrics(areaMetrics, selectedProfile, thresholds, parsedRoofMpd)
+  const handleTowerHeightChange = (towerId: string, value: string) => {
+    setTowerHeights((prev) => ({ ...prev, [towerId]: value }));
+  };
+
+  const updateProfileMixTargets = useCallback((newMixTargets: MixTargetEntry[]) => {
+    const updatedProfile: Profile = {
+      ...selectedProfile,
+      mixTargets: newMixTargets,
+    };
+    const updatedProfiles = profiles.map((p) =>
+      p.id === selectedProfile.id ? updatedProfile : p
+    );
+    setProfiles(updatedProfiles);
+    saveProfiles(updatedProfiles);
+  }, [selectedProfile, profiles]);
+
+  const handleMixTargetUpdate = useCallback((index: number, field: keyof MixTargetEntry, value: string | string[] | number) => {
+    const mixTargets = selectedProfile.mixTargets || [];
+    const updated = mixTargets.map((t, i) => {
+      if (i !== index) return t;
+      if (field === 'share') {
+        const percent = typeof value === 'number' ? value : parseFloat(value as string) || 0;
+        return { ...t, share: Math.max(0, Math.min(100, percent)) / 100 };
+      }
+      if (field === 'match') {
+        const matchArray = typeof value === 'string'
+          ? value.split(',').map((s) => s.trim()).filter(Boolean)
+          : value as string[];
+        return { ...t, match: matchArray };
+      }
+      return { ...t, [field]: value };
+    });
+    updateProfileMixTargets(updated);
+  }, [selectedProfile, updateProfileMixTargets]);
+
+  const handleAddMixTarget = useCallback(() => {
+    const mixTargets = selectedProfile.mixTargets || [];
+    const newTarget: MixTargetEntry = {
+      id: `mix-${Date.now()}`,
+      label: 'New Mix Target',
+      match: [],
+      share: 0,
+    };
+    updateProfileMixTargets([...mixTargets, newTarget]);
+  }, [selectedProfile, updateProfileMixTargets]);
+
+  const handleRemoveMixTarget = useCallback((index: number) => {
+    const mixTargets = selectedProfile.mixTargets || [];
+    updateProfileMixTargets(mixTargets.filter((_, i) => i !== index));
+  }, [selectedProfile, updateProfileMixTargets]);
+
+  const handleAddFromFunction = useCallback((functionName: string) => {
+    const mixTargets = selectedProfile.mixTargets || [];
+    const newTarget: MixTargetEntry = {
+      id: `mix-${Date.now()}`,
+      label: `${functionName} GFA`,
+      match: [functionName.toLowerCase()],
+      share: 0,
+    };
+    updateProfileMixTargets([...mixTargets, newTarget]);
+  }, [selectedProfile, updateProfileMixTargets]);
+
+  const mixTargetShareSum = useMemo(() => {
+    const targets = selectedProfile.mixTargets || [];
+    return targets.reduce((sum, t) => sum + t.share, 0);
+  }, [selectedProfile.mixTargets]);
+
+  const handleNormalizeMixTargets = useCallback(() => {
+    const mixTargets = selectedProfile.mixTargets || [];
+    if (mixTargets.length === 0 || mixTargetShareSum === 0) return;
+    const normalized = mixTargets.map((t) => ({
+      ...t,
+      share: t.share / mixTargetShareSum,
+    }));
+    updateProfileMixTargets(normalized);
+  }, [selectedProfile, mixTargetShareSum, updateProfileMixTargets]);
+
+  const availableFunctions = useMemo(() => {
+    if (!areaMetrics) return [];
+    const usedMatches = new Set<string>();
+    for (const target of selectedProfile.mixTargets || []) {
+      for (const m of target.match) {
+        usedMatches.add(m.toLowerCase());
+      }
+    }
+    return areaMetrics.functionBreakdown
+      .map((f) => f.functionName)
+      .filter((name) => !usedMatches.has(name.toLowerCase()));
+  }, [areaMetrics, selectedProfile.mixTargets]);
+
+  const allMetrics = areaMetrics
+    ? calculateMetrics(areaMetrics, selectedProfile, thresholds, towerHeights)
     : [];
+
+  useEffect(() => {
+    if (allMetrics.length === 0) return;
+    const newSeen = new Set(seenCustomMetrics);
+    let changed = false;
+    for (const metric of allMetrics) {
+      if (metric.customMetricId && !seenCustomMetrics.has(metric.customMetricId)) {
+        newSeen.add(metric.customMetricId);
+        changed = true;
+      }
+    }
+    if (changed) {
+      setSeenCustomMetrics(newSeen);
+      saveSeenCustomMetrics(newSeen);
+    }
+  }, [allMetrics, seenCustomMetrics]);
+
+  const mixTargetLabels = useMemo(() => {
+    return (selectedProfile.mixTargets || []).map((t) => t.label);
+  }, [selectedProfile.mixTargets]);
+
+  const getVisibility = useCallback((metric: MetricRow): boolean => {
+    const key = getMetricKey(metric);
+    if (key in visibility) return visibility[key];
+    if (isCoreOrMixMetric(metric, mixTargetLabels)) return true;
+    if (metric.customMetricId && seenCustomMetrics.has(metric.customMetricId)) {
+      return true;
+    }
+    return true;
+  }, [visibility, seenCustomMetrics, mixTargetLabels]);
+
+  const handleVisibilityChange = useCallback((metric: MetricRow, checked: boolean) => {
+    const key = getMetricKey(metric);
+    const newVis = { ...visibility, [key]: checked };
+    setVisibility(newVis);
+    saveVisibility(newVis);
+  }, [visibility]);
+
+  const visibleMetrics = useMemo(() => {
+    return allMetrics.filter(getVisibility);
+  }, [allMetrics, getVisibility]);
 
   return (
     <div class="panel">
       <div class="header">
-        <h1 class="title">HK Metrics Panel</h1>
+        <h1 class="title">Design Metric Track</h1>
       </div>
-
-      <Disclaimer />
 
       <div class="profile-section">
         <div class="profile-row">
@@ -142,19 +334,102 @@ export function App() {
 
       {selectedProfile.towers.length > 0 && (
         <div class="height-input-section">
-          <div class="height-input-row">
-            <label>Manual roof mPD:</label>
-            <input
-              type="number"
-              step="0.1"
-              value={manualRoofMpd}
-              onInput={(e) => setManualRoofMpd((e.target as HTMLInputElement).value)}
-              placeholder="Enter height"
-            />
-            <span>mPD</span>
-          </div>
+          {selectedProfile.towers.map((tower) => (
+            <div class="height-input-row" key={tower.id}>
+              <label>{tower.id} mPD</label>
+              <input
+                type="number"
+                step="0.1"
+                value={towerHeights[tower.id] || ''}
+                onInput={(e) => handleTowerHeightChange(tower.id, (e.target as HTMLInputElement).value)}
+                placeholder={`≤${tower.maxBhMpd}`}
+              />
+            </div>
+          ))}
         </div>
       )}
+
+      <div class="mix-targets-section">
+        <button
+          class="config-toggle"
+          onClick={() => setMixTargetsExpanded(!mixTargetsExpanded)}
+        >
+          {mixTargetsExpanded ? '▾' : '▸'} Mix targets
+          {(selectedProfile.mixTargets?.length ?? 0) > 0 && (
+            <span class="mix-count">({selectedProfile.mixTargets?.length})</span>
+          )}
+        </button>
+        {mixTargetsExpanded && (
+          <div class="mix-targets-content">
+            {(selectedProfile.mixTargets || []).map((target, index) => (
+              <div class="mix-target-entry" key={target.id}>
+                <div class="mix-target-entry-row">
+                  <input
+                    type="text"
+                    class="mix-target-label-input"
+                    value={target.label}
+                    onInput={(e) => handleMixTargetUpdate(index, 'label', (e.target as HTMLInputElement).value)}
+                    placeholder="Label"
+                  />
+                  <input
+                    type="text"
+                    class="mix-target-match-input"
+                    value={target.match.join(', ')}
+                    onInput={(e) => handleMixTargetUpdate(index, 'match', (e.target as HTMLInputElement).value)}
+                    placeholder="Match keywords"
+                  />
+                  <input
+                    type="number"
+                    class="mix-target-share-input"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={Math.round(target.share * 100)}
+                    onInput={(e) => handleMixTargetUpdate(index, 'share', (e.target as HTMLInputElement).value)}
+                  />
+                  <span class="mix-target-percent">%</span>
+                  <button
+                    class="btn btn-icon-sm"
+                    onClick={() => handleRemoveMixTarget(index)}
+                    title="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+            <div class="mix-targets-actions">
+              <button class="btn btn-sm" onClick={handleAddMixTarget}>
+                + Add target
+              </button>
+              {Math.abs(mixTargetShareSum - 1) > 0.001 && (selectedProfile.mixTargets?.length ?? 0) > 0 && (
+                <div class="mix-sum-hint">
+                  Sum: {Math.round(mixTargetShareSum * 100)}%
+                  <button class="btn btn-sm" onClick={handleNormalizeMixTargets}>
+                    Normalize
+                  </button>
+                </div>
+              )}
+            </div>
+            {availableFunctions.length > 0 && (
+              <div class="mix-functions-hint">
+                <span class="hint-label">Add from Forma:</span>
+                <div class="function-chips">
+                  {availableFunctions.slice(0, 5).map((fn) => (
+                    <button
+                      key={fn}
+                      class="function-chip"
+                      onClick={() => handleAddFromFunction(fn)}
+                    >
+                      + {fn}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <div class="toolbar">
         <div class="checkbox-row">
@@ -178,7 +453,39 @@ export function App() {
       {loading ? (
         <div class="loading">Loading metrics...</div>
       ) : (
-        <MetricsTable metrics={metrics} />
+        <>
+          <MetricsTable metrics={visibleMetrics} />
+          <div class="config-section">
+            <button
+              class="config-toggle"
+              onClick={() => setConfigExpanded(!configExpanded)}
+            >
+              {configExpanded ? '▾' : '▸'} Configure metrics
+            </button>
+            {configExpanded && (
+              <div class="config-content">
+                <div class="config-label">Metrics to show:</div>
+                {allMetrics.map((metric) => {
+                  const key = getMetricKey(metric);
+                  const checked = getVisibility(metric);
+                  return (
+                    <div class="checkbox-row" key={key}>
+                      <input
+                        type="checkbox"
+                        id={`vis-${key}`}
+                        checked={checked}
+                        onChange={(e) =>
+                          handleVisibilityChange(metric, (e.target as HTMLInputElement).checked)
+                        }
+                      />
+                      <label for={`vis-${key}`}>{metric.name}</label>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {!isForma && !loading && (

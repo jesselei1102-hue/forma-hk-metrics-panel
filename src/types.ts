@@ -3,6 +3,18 @@ export interface TowerLimit {
   maxBhMpd: number;
 }
 
+export interface MixTargetEntry {
+  id: string;
+  label: string;
+  match: string[];
+  share: number;
+}
+
+export interface LegacyMixTarget {
+  officeShare: number;
+  retailShare: number;
+}
+
 export interface Profile {
   id: string;
   projectName: string;
@@ -12,25 +24,42 @@ export interface Profile {
   maxSc: number | null;
   gfMpd: number;
   towers: TowerLimit[];
+  mixTargets?: MixTargetEntry[];
+  mixTarget?: LegacyMixTarget;
   useMix?: boolean;
   minPosM2?: number | null;
   minParking?: number | null;
   sourceNote?: string;
 }
 
+export interface FunctionGfa {
+  functionName: string;
+  value: number;
+}
+
+export interface CustomMetricData {
+  id: string;
+  name: string;
+  actual: number | null;
+}
+
 export interface AreaMetricsData {
   siteArea: number | null;
   grossFloorArea: number | null;
   buildingCoverage: number | null;
+  functionBreakdown: FunctionGfa[];
+  customMetrics: CustomMetricData[];
 }
+
+export type TowerHeights = Record<string, string>;
 
 export interface MetricRow {
   name: string;
-  nameZh?: string;
   actual: number | null;
   limit: number | null;
   usagePercent: number | null;
   status: 'green' | 'yellow' | 'red' | 'none';
+  customMetricId?: string;
 }
 
 export type StatusThresholds = {
