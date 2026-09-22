@@ -10,6 +10,17 @@ function calculateStatus(
   return 'red';
 }
 
+function calculateMixStatus(
+  usagePercent: number | null,
+  thresholds: StatusThresholds
+): 'green' | 'yellow' | 'red' | 'none' {
+  if (usagePercent === null) return 'none';
+  const deviation = Math.abs(usagePercent - 100);
+  if (deviation <= 5) return 'green';
+  if (thresholds.yellowEnabled && deviation <= 10) return 'yellow';
+  return 'red';
+}
+
 function matchesOffice(name: string): boolean {
   const lower = name.toLowerCase();
   return lower.includes('office') || lower.includes('办公');
@@ -145,7 +156,7 @@ export function calculateMetrics(
       actual: officeGfa,
       limit: officeTargetGfa,
       usagePercent: officeUsage,
-      status: 'none',
+      status: calculateMixStatus(officeUsage, thresholds),
     });
 
     const retailUsage =
@@ -158,7 +169,7 @@ export function calculateMetrics(
       actual: retailGfa,
       limit: retailTargetGfa,
       usagePercent: retailUsage,
-      status: 'none',
+      status: calculateMixStatus(retailUsage, thresholds),
     });
   }
 
