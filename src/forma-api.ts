@@ -38,13 +38,8 @@ type RawCustomMetric = Record<string, unknown> & {
   value?: number | 'UNABLE_TO_CALCULATE';
 };
 
-function looksLikeFormula(str: string): boolean {
-  if (/[A-Za-z_]+\s*[/*+]\s*[A-Za-z_]/.test(str)) return true;
-  const trimmed = str.trim();
-  if (trimmed.includes('/') || trimmed.includes('*') || trimmed.includes('+')) {
-    if (/^[A-Za-z0-9_\s/*+()-]+$/.test(trimmed)) return true;
-  }
-  return false;
+function looksLikeUuid(str: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
 }
 
 function pickDisplayName(metric: RawCustomMetric): string {
@@ -54,20 +49,19 @@ function pickDisplayName(metric: RawCustomMetric): string {
   };
 
   const displayName = getString('displayName');
-  if (displayName) return displayName;
+  if (displayName && !looksLikeUuid(displayName)) return displayName;
 
   const label = getString('label');
-  if (label) return label;
+  if (label && !looksLikeUuid(label)) return label;
 
   const title = getString('title');
-  if (title) return title;
+  if (title && !looksLikeUuid(title)) return title;
 
   const name = getString('name');
-  const id = getString('id');
+  if (name && !looksLikeUuid(name)) return name;
 
-  if (name && !looksLikeFormula(name)) return name;
-  if (id && !looksLikeFormula(id)) return id;
-  if (name) return name;
+  const id = getString('id');
+  if (id && !looksLikeUuid(id)) return id;
 
   return 'Custom metric';
 }
@@ -140,14 +134,37 @@ export async function fetchAreaMetrics(): Promise<AreaMetricsData> {
       ? extractValue(siteMetrics.builtInMetrics.siteArea?.value)
       : null;
 
-    const { total: gfa, functions: functionBreakdown } = extractFunctionBreakdown(
-      buildingMetrics.builtInMetrics.grossFloorArea.functionBreakdown
-    );
+    const gfaMetric = buildingMetrics.builtInMetrics.grossFloorArea;
+    let gfa: number | null = null;
+    let functionBreakdown: FunctionGfa[] = [];
+
+    if (gfaMetric.functionBreakdown && gfaMetric.functionBreakdown.length > 0) {
+      const extracted = extractFunctionBreakdown(gfaMetric.functionBreakdown);
+      gfa = extracted.total;
+      functionBreakdown = extracted.functions;
+    }
+
+    if (gfa === null) {
+      const gfaValue = (gfaMetric as { value?: number | 'UNABLE_TO_CALCULATE' }).value;
+      gfa = extractValue(gfaValue);
+    }
+
     const buildingCoverage = extractValue(buildingMetrics.builtInMetrics.buildingCoverage?.value);
 
-    const customMetrics = extractCustomMetrics(
-      (buildingMetrics as { customMetrics?: RawCustomMetric[] }).customMetrics
-    );
+    const rawCustomMetrics = (buildingMetrics as { customMetrics?: RawCustomMetric[] }).customMetrics;
+    const customMetrics = extractCustomMetrics(rawCustomMetrics);
+
+    console.debug('[forma-api] fetchAreaMetrics debug:', {
+      sitePaths: sitePaths.length,
+      buildingPaths: buildingPaths.length,
+      siteArea,
+      gfa,
+      functionBreakdownCount: functionBreakdown.length,
+      buildingCoverage,
+      customMetricsCount: customMetrics.length,
+      rawGfaMetric: gfaMetric,
+      rawCustomMetric0Keys: rawCustomMetrics?.[0] ? Object.keys(rawCustomMetrics[0]) : null,
+    });
 
     return {
       siteArea,
