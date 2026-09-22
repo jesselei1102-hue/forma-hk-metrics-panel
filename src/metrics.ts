@@ -1,5 +1,5 @@
-import type { MetricRow, Profile, AreaMetricsData, StatusThresholds, TowerHeights, FunctionGfa, MixTargetEntry, LimitSource } from './types';
-import { lookupFirstSchedule, type FirstScheduleResult } from './bpr-first-schedule';
+import type { MetricRow, Profile, AreaMetricsData, StatusThresholds, TowerHeights, FunctionGfa, MixTargetEntry, LimitSource, DerivedBuildingHeight } from './types';
+import { lookupFirstSchedule, deriveBuildingHeight, type FirstScheduleResult } from './bpr-first-schedule';
 
 function calculateStatus(
   usagePercent: number | null,
@@ -60,18 +60,43 @@ function determineEffectiveLimit(
   return { limit: null, source: null };
 }
 
+export interface MetricsCalculationResult {
+  metrics: MetricRow[];
+  derivedHeight: DerivedBuildingHeight | null;
+  bprResult: FirstScheduleResult | null;
+}
+
 export function calculateMetrics(
   areaData: AreaMetricsData,
   profile: Profile,
   thresholds: StatusThresholds,
   towerHeights: TowerHeights
 ): MetricRow[] {
+  return calculateMetricsWithInfo(areaData, profile, thresholds, towerHeights).metrics;
+}
+
+export function calculateMetricsWithInfo(
+  areaData: AreaMetricsData,
+  profile: Profile,
+  thresholds: StatusThresholds,
+  towerHeights: TowerHeights
+): MetricsCalculationResult {
   const metrics: MetricRow[] = [];
+
+  const derivedHeight = deriveBuildingHeight(
+    profile.towers,
+    towerHeights,
+    profile.gfMpd,
+    profile.buildingHeightM
+  );
+
+  const effectiveHeightM = derivedHeight?.heightM ?? profile.buildingHeightM ?? undefined;
 
   const bprResult: FirstScheduleResult | null = lookupFirstSchedule({
     siteClass: profile.siteClass ?? undefined,
     useType: profile.useType ?? undefined,
-    buildingHeightM: profile.buildingHeightM ?? undefined,
+    buildingHeightM: effectiveHeightM,
+    domesticShare: profile.domesticShare ?? undefined,
   });
 
   const siteAreaActual = areaData.siteArea;
@@ -215,7 +240,7 @@ export function calculateMetrics(
     });
   }
 
-  return metrics;
+  return { metrics, derivedHeight, bprResult };
 }
 
 export function formatValue(value: number | null, decimals: number = 2): string {

@@ -13,22 +13,32 @@
  *   and building height bands
  * - Maximum site coverage by the same factors
  *
- * Note: "composite" buildings (domestic + non-domestic mixed) require
- * advanced calculation per reg 21(2) and are NOT auto-calculated here.
+ * Composite buildings (reg 21(2)):
+ * For composite buildings, the permissible plot ratio is calculated as:
+ *   PR_composite = (domesticShare × PR_domestic) + ((1 - domesticShare) × PR_nonDomestic)
+ * Site coverage uses the stricter of domestic and non-domestic limits.
  */
 
-import type { SiteClass, UseType } from './types';
+import type { SiteClass, UseType, TowerLimit, DerivedBuildingHeight } from './types';
 
 export interface FirstScheduleResult {
   maxPr: number;
   maxSc: number;
   bandLabel: string;
+  isComposite?: boolean;
+  domesticPr?: number;
+  nonDomesticPr?: number;
 }
 
 export interface FirstScheduleLookupParams {
   siteClass: SiteClass;
   useType: UseType;
   buildingHeightM: number;
+  domesticShare?: number;
+}
+
+export interface TowerHeights {
+  [towerId: string]: string;
 }
 
 interface HeightBand {
@@ -284,26 +294,82 @@ const FIRST_SCHEDULE_TABLES: Record<SiteClass, SiteClassTable> = {
 };
 
 /**
+ * Derive building height in metres from tower mPD inputs.
+ *
+ * Formula: buildingHeightM = max(tower roof mPD values) - gfMpd
+ *
+ * This assumes the tallest tower governs the First Schedule lookup,
+ * which is the conservative approach for intensity caps.
+ *
+ * @param towers - Profile tower definitions
+ * @param towerHeights - User-entered roof mPD values
+ * @param gfMpd - Ground floor mPD datum
+ * @param manualOverride - Optional manual override (if set, use this instead)
+ * @returns DerivedBuildingHeight with source info, or null if cannot derive
+ */
+export function deriveBuildingHeight(
+  towers: TowerLimit[],
+  towerHeights: TowerHeights,
+  gfMpd: number,
+  manualOverride?: number | null
+): DerivedBuildingHeight | null {
+  if (manualOverride !== undefined && manualOverride !== null && manualOverride > 0) {
+    return {
+      heightM: manualOverride,
+      source: 'manual',
+    };
+  }
+
+  if (towers.length === 0 || gfMpd <= 0) {
+    return null;
+  }
+
+  let maxRoofMpd = 0;
+  let governingTowerId: string | undefined;
+
+  for (const tower of towers) {
+    const roofMpdStr = towerHeights[tower.id];
+    if (!roofMpdStr) continue;
+    const roofMpd = parseFloat(roofMpdStr);
+    if (!Number.isFinite(roofMpd) || roofMpd <= 0) continue;
+    if (roofMpd > maxRoofMpd) {
+      maxRoofMpd = roofMpd;
+      governingTowerId = tower.id;
+    }
+  }
+
+  if (maxRoofMpd <= gfMpd) {
+    return null;
+  }
+
+  const heightM = maxRoofMpd - gfMpd;
+  return {
+    heightM,
+    source: 'derived',
+    governingTowerId,
+  };
+}
+
+/**
  * Look up First Schedule limits for a given site class, use type, and building height.
  *
  * @returns FirstScheduleResult with maxPr (plot ratio), maxSc (site coverage as 0-1), bandLabel
- * @returns null if useType is 'composite' (requires manual calculation per reg 21(2))
  * @returns null if any required param is missing
+ *
+ * For composite use, if domesticShare is provided (0-1), calculates weighted PR per reg 21(2):
+ *   PR = domesticShare × PR_domestic + (1 - domesticShare) × PR_nonDomestic
+ * SC uses the stricter (lower) of domestic/non-domestic limits.
  */
 export function lookupFirstSchedule(
   params: Partial<FirstScheduleLookupParams>
 ): FirstScheduleResult | null {
-  const { siteClass, useType, buildingHeightM } = params;
+  const { siteClass, useType, buildingHeightM, domesticShare } = params;
 
   if (!siteClass || !useType || buildingHeightM === undefined || buildingHeightM === null) {
     return null;
   }
 
   if (buildingHeightM <= 0) {
-    return null;
-  }
-
-  if (useType === 'composite') {
     return null;
   }
 
@@ -315,6 +381,26 @@ export function lookupFirstSchedule(
   const band = table.bands.find((b) => buildingHeightM <= b.maxHeightM);
   if (!band) {
     return null;
+  }
+
+  if (useType === 'composite') {
+    if (domesticShare === undefined || domesticShare === null) {
+      return null;
+    }
+    const clampedShare = Math.max(0, Math.min(1, domesticShare));
+    const domesticPr = band.domestic.pr;
+    const nonDomesticPr = band.nonDomestic.pr;
+    const compositePr = clampedShare * domesticPr + (1 - clampedShare) * nonDomesticPr;
+    const compositeSc = Math.min(band.domestic.sc, band.nonDomestic.sc);
+
+    return {
+      maxPr: Math.round(compositePr * 100) / 100,
+      maxSc: compositeSc,
+      bandLabel: `Class ${siteClass} ${band.label} (composite ${Math.round(clampedShare * 100)}% dom.)`,
+      isComposite: true,
+      domesticPr,
+      nonDomesticPr,
+    };
   }
 
   const values = useType === 'domestic' ? band.domestic : band.nonDomestic;
@@ -346,27 +432,64 @@ export function canLookupFirstSchedule(
   return true;
 }
 
+export interface BprStatusInfo {
+  isReady: boolean;
+  hint: string | null;
+  missing: string[];
+  unlocks: string[];
+}
+
+/**
+ * Get detailed status about B(P)R First Schedule readiness.
+ */
+export function getBprStatus(
+  siteClass: SiteClass | null | undefined,
+  useType: UseType | null | undefined,
+  buildingHeightM: number | null | undefined,
+  domesticShare: number | null | undefined
+): BprStatusInfo {
+  const missing: string[] = [];
+  const unlocks: string[] = [];
+
+  if (!siteClass) {
+    missing.push('Site Class');
+    unlocks.push('Site class determines base intensity zone (A=urban, B=intermediate, C=low-density)');
+  }
+  if (!useType) {
+    missing.push('Use Type');
+    unlocks.push('Use type (domestic/non-domestic/composite) affects PR caps');
+  }
+  if (buildingHeightM === undefined || buildingHeightM === null || buildingHeightM <= 0) {
+    missing.push('Building Height (m)');
+    unlocks.push('Height band determines PR/SC caps — enter tower mPD or set manual override');
+  }
+  if (useType === 'composite' && (domesticShare === undefined || domesticShare === null)) {
+    missing.push('Domestic Share %');
+    unlocks.push('Composite PR = weighted average per reg 21(2)');
+  }
+
+  const isReady = missing.length === 0;
+  let hint: string | null = null;
+
+  if (!isReady) {
+    hint = `Set ${missing.join(', ')} to unlock B(P)R First Schedule limits`;
+  }
+
+  return { isReady, hint, missing, unlocks };
+}
+
 /**
  * Get a user-friendly message about why First Schedule lookup is not available.
+ * @deprecated Use getBprStatus for more detailed info
  */
 export function getFirstScheduleHint(
   siteClass: SiteClass | null | undefined,
   useType: UseType | null | undefined,
-  buildingHeightM: number | null | undefined
+  buildingHeightM: number | null | undefined,
+  domesticShare?: number | null | undefined
 ): string | null {
-  if (useType === 'composite') {
-    return 'Composite use requires manual B(P)R calculation per reg 21(2)';
-  }
-  const missing: string[] = [];
-  if (!siteClass) missing.push('site class');
-  if (!useType) missing.push('use type');
-  if (buildingHeightM === undefined || buildingHeightM === null || buildingHeightM <= 0) {
-    missing.push('building height (m)');
-  }
-  if (missing.length > 0) {
-    return `Set ${missing.join(', ')} in Profile to unlock B(P)R First Schedule`;
-  }
-  return null;
+  const status = getBprStatus(siteClass, useType, buildingHeightM, domesticShare);
+  return status.hint;
 }
 
 /**

@@ -220,11 +220,11 @@ export function ProfileEditor({ profile, onSave, onCancel, isNew = false }: Prop
             <label class="form-label">B(P)R First Schedule (optional)</label>
             <div class="bpr-hint">
               Set these to see Cap. 123F statutory intensity caps alongside profile limits.
-              Building height is in metres (not mPD).
+              Building height auto-derives from tower mPD inputs, or set manual override below.
             </div>
-            <div class="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+            <div class="form-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
               <div class="form-group" style={{ marginBottom: 0 }}>
-                <label class="form-label-sm">Site Class</label>
+                <label class="form-label-sm">Site Class (reg 18A)</label>
                 <select
                   class="form-input"
                   value={formData.siteClass ?? ''}
@@ -234,9 +234,9 @@ export function ProfileEditor({ profile, onSave, onCancel, isNew = false }: Prop
                   }}
                 >
                   <option value="">— Not set —</option>
-                  <option value="A">Class A</option>
-                  <option value="B">Class B</option>
-                  <option value="C">Class C</option>
+                  <option value="A">Class A (urban)</option>
+                  <option value="B">Class B (intermediate)</option>
+                  <option value="C">Class C (low density)</option>
                 </select>
               </div>
               <div class="form-group" style={{ marginBottom: 0 }}>
@@ -252,11 +252,13 @@ export function ProfileEditor({ profile, onSave, onCancel, isNew = false }: Prop
                   <option value="">— Not set —</option>
                   <option value="domestic">Domestic</option>
                   <option value="non-domestic">Non-domestic</option>
-                  <option value="composite">Composite</option>
+                  <option value="composite">Composite (mixed)</option>
                 </select>
               </div>
+            </div>
+            <div class="form-row" style={{ gridTemplateColumns: '1fr 1fr', marginTop: '8px' }}>
               <div class="form-group" style={{ marginBottom: 0 }}>
-                <label class="form-label-sm">Building Height (m)</label>
+                <label class="form-label-sm">Building Height Override (m)</label>
                 <input
                   class="form-input"
                   type="number"
@@ -266,14 +268,36 @@ export function ProfileEditor({ profile, onSave, onCancel, isNew = false }: Prop
                   onInput={(e) =>
                     handleChange('buildingHeightM', parseNumber((e.target as HTMLInputElement).value))
                   }
-                  placeholder="e.g. 70"
+                  placeholder="Auto from towers"
                 />
               </div>
+              {formData.useType === 'composite' && (
+                <div class="form-group" style={{ marginBottom: 0 }}>
+                  <label class="form-label-sm">Domestic GFA Share (%)</label>
+                  <input
+                    class="form-input"
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="100"
+                    value={formData.domesticShare !== null && formData.domesticShare !== undefined
+                      ? Math.round(formData.domesticShare * 100)
+                      : ''}
+                    onInput={(e) => {
+                      const pct = parseNumber((e.target as HTMLInputElement).value);
+                      handleChange('domesticShare', pct !== null ? Math.max(0, Math.min(100, pct)) / 100 : null);
+                    }}
+                    placeholder="e.g. 60"
+                  />
+                </div>
+              )}
             </div>
             {formData.useType === 'composite' && (
-              <div class="bpr-warning">
-                Composite buildings require manual B(P)R calculation per reg 21(2).
-                First Schedule lookup not available.
+              <div class="bpr-composite-info">
+                Composite PR = (domestic% × PR_dom) + (non-domestic% × PR_nonDom) per reg 21(2).
+                {formData.domesticShare === null || formData.domesticShare === undefined
+                  ? ' Set domestic share % above to calculate.'
+                  : ` Using ${Math.round((formData.domesticShare ?? 0) * 100)}% domestic / ${Math.round((1 - (formData.domesticShare ?? 0)) * 100)}% non-domestic.`}
               </div>
             )}
           </div>

@@ -16,6 +16,7 @@ export const BLANK_PROFILE: Profile = {
   siteClass: null,
   useType: null,
   buildingHeightM: null,
+  domesticShare: null,
 };
 
 export const CENTRAL_YARD_PROFILE: Profile = {
@@ -41,6 +42,7 @@ export const CENTRAL_YARD_PROFILE: Profile = {
   siteClass: null,
   useType: null,
   buildingHeightM: null,
+  domesticShare: null,
 };
 
 export const DEFAULT_PROFILES: Profile[] = [BLANK_PROFILE, CENTRAL_YARD_PROFILE];
@@ -85,6 +87,7 @@ function migrateBprFields(profile: Profile): Profile {
     siteClass: profile.siteClass ?? null,
     useType: profile.useType ?? null,
     buildingHeightM: profile.buildingHeightM ?? null,
+    domesticShare: profile.domesticShare ?? null,
   };
 }
 

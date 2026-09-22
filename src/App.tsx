@@ -8,10 +8,10 @@ import {
   BLANK_PROFILE,
 } from './profiles';
 import { fetchAreaMetrics, isFormaEnvironment } from './forma-api';
-import { calculateMetrics } from './metrics';
+import { calculateMetricsWithInfo, type MetricsCalculationResult } from './metrics';
 import { MetricsTable } from './components/MetricsTable';
 import { ProfileEditor } from './components/ProfileEditor';
-import { getFirstScheduleHint } from './bpr-first-schedule';
+import { getBprStatus, type BprStatusInfo } from './bpr-first-schedule';
 
 const VISIBILITY_STORAGE_KEY = 'forma-hk-metrics-visibility';
 const SEEN_CUSTOM_METRICS_KEY = 'forma-hk-metrics-seen-custom';
@@ -261,9 +261,21 @@ export function App() {
       .filter((name) => !usedMatches.has(name.toLowerCase()));
   }, [areaMetrics, selectedProfile.mixTargets]);
 
-  const allMetrics = areaMetrics
-    ? calculateMetrics(areaMetrics, selectedProfile, thresholds, towerHeights)
-    : [];
+  const metricsResult: MetricsCalculationResult | null = areaMetrics
+    ? calculateMetricsWithInfo(areaMetrics, selectedProfile, thresholds, towerHeights)
+    : null;
+
+  const allMetrics = metricsResult?.metrics ?? [];
+  const derivedHeight = metricsResult?.derivedHeight ?? null;
+  const bprResult = metricsResult?.bprResult ?? null;
+
+  const effectiveHeightM = derivedHeight?.heightM ?? null;
+  const bprStatus: BprStatusInfo = getBprStatus(
+    selectedProfile.siteClass,
+    selectedProfile.useType,
+    effectiveHeightM,
+    selectedProfile.domesticShare
+  );
 
   useEffect(() => {
     if (allMetrics.length === 0) return;
@@ -461,15 +473,56 @@ export function App() {
         <div class="loading">Loading metrics...</div>
       ) : (
         <>
+          {!bprStatus.isReady && (
+            <div class="bpr-status-panel">
+              <div class="bpr-status-header">
+                <span class="bpr-status-icon">📋</span>
+                <span>B(P)R First Schedule</span>
+              </div>
+              <div class="bpr-status-missing">
+                {bprStatus.missing.map((field) => (
+                  <div class="bpr-missing-item" key={field}>
+                    <span class="missing-check">☐</span>
+                    <span>{field}</span>
+                  </div>
+                ))}
+              </div>
+              <div class="bpr-status-hint">
+                {bprStatus.hint}
+              </div>
+            </div>
+          )}
+
+          {bprStatus.isReady && bprResult && (
+            <div class="bpr-active-panel">
+              <div class="bpr-active-header">
+                <span class="bpr-status-icon">✓</span>
+                <span>B(P)R First Schedule Active</span>
+              </div>
+              <div class="bpr-active-info">
+                <span class="bpr-band">{bprResult.bandLabel}</span>
+                {derivedHeight && derivedHeight.source === 'derived' && derivedHeight.governingTowerId && (
+                  <span class="bpr-derived">
+                    Height from {derivedHeight.governingTowerId}: {derivedHeight.heightM.toFixed(1)}m
+                  </span>
+                )}
+                {derivedHeight && derivedHeight.source === 'manual' && (
+                  <span class="bpr-derived">Manual height: {derivedHeight.heightM.toFixed(1)}m</span>
+                )}
+              </div>
+              {bprResult.isComposite && (
+                <div class="bpr-composite-detail">
+                  Composite PR: {bprResult.maxPr} (dom. {bprResult.domesticPr} / non-dom. {bprResult.nonDomesticPr})
+                </div>
+              )}
+            </div>
+          )}
+
           <MetricsTable
             metrics={visibleMetrics}
             liveSiteArea={areaMetrics?.siteArea}
             profileSiteArea={selectedProfile.siteAreaM2}
-            bprHint={getFirstScheduleHint(
-              selectedProfile.siteClass,
-              selectedProfile.useType,
-              selectedProfile.buildingHeightM
-            )}
+            bprHint={null}
           />
           <div class="config-section">
             <button

@@ -37,8 +37,24 @@ export interface Profile {
   siteClass?: SiteClass | null;
   /** B(P)R use classification for First Schedule lookup */
   useType?: UseType | null;
-  /** Building height in metres (NOT mPD) for First Schedule bands */
+  /**
+   * Manual building height override in metres (NOT mPD) for First Schedule bands.
+   * If null/undefined, derived from max(tower roof mPD) - gfMpd.
+   */
   buildingHeightM?: number | null;
+  /**
+   * For composite use: domestic GFA share (0-1).
+   * Used to calculate weighted composite PR/SC limits.
+   * If null, user must set explicitly or pick domestic/non-domestic.
+   */
+  domesticShare?: number | null;
+}
+
+/** Derived building height info for UI display */
+export interface DerivedBuildingHeight {
+  heightM: number;
+  source: 'manual' | 'derived';
+  governingTowerId?: string;
 }
 
 export interface FunctionGfa {
