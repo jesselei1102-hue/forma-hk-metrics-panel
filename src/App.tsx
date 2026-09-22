@@ -172,6 +172,28 @@ export function App() {
     setTowerHeights((prev) => ({ ...prev, [towerId]: value }));
   };
 
+  const handleMixTargetChange = (field: 'officeShare' | 'retailShare', percentValue: number) => {
+    const clamped = Math.max(0, Math.min(100, percentValue));
+    const share = clamped / 100;
+    const otherShare = (100 - clamped) / 100;
+
+    const newMixTarget = field === 'officeShare'
+      ? { officeShare: share, retailShare: otherShare }
+      : { officeShare: otherShare, retailShare: share };
+
+    const updatedProfile: Profile = {
+      ...selectedProfile,
+      useMix: true,
+      mixTarget: newMixTarget,
+    };
+
+    const updatedProfiles = profiles.map((p) =>
+      p.id === selectedProfile.id ? updatedProfile : p
+    );
+    setProfiles(updatedProfiles);
+    saveProfiles(updatedProfiles);
+  };
+
   const allMetrics = areaMetrics
     ? calculateMetrics(areaMetrics, selectedProfile, thresholds, towerHeights)
     : [];
@@ -254,6 +276,36 @@ export function App() {
               />
             </div>
           ))}
+        </div>
+      )}
+
+      {(selectedProfile.useMix || selectedProfile.mixTarget) && (
+        <div class="mix-target-section">
+          <div class="mix-target-label">Mix target</div>
+          <div class="mix-target-row">
+            <div class="mix-target-input">
+              <label>Office %</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={Math.round((selectedProfile.mixTarget?.officeShare ?? 0) * 100)}
+                onInput={(e) => handleMixTargetChange('officeShare', parseFloat((e.target as HTMLInputElement).value) || 0)}
+              />
+            </div>
+            <div class="mix-target-input">
+              <label>Retail %</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={Math.round((selectedProfile.mixTarget?.retailShare ?? 0) * 100)}
+                onInput={(e) => handleMixTargetChange('retailShare', parseFloat((e.target as HTMLInputElement).value) || 0)}
+              />
+            </div>
+          </div>
         </div>
       )}
 

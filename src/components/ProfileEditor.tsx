@@ -20,6 +20,22 @@ export function ProfileEditor({ profile, onSave, onCancel, isNew = false }: Prop
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleMixShareChange = (field: 'officeShare' | 'retailShare', percentValue: number) => {
+    const clamped = Math.max(0, Math.min(100, percentValue));
+    const share = clamped / 100;
+    const otherShare = (100 - clamped) / 100;
+
+    const newMixTarget = field === 'officeShare'
+      ? { officeShare: share, retailShare: otherShare }
+      : { officeShare: otherShare, retailShare: share };
+
+    setFormData((prev) => ({
+      ...prev,
+      useMix: true,
+      mixTarget: newMixTarget,
+    }));
+  };
+
   const parseNumber = (value: string): number | null => {
     if (value === '' || value === null) return null;
     const num = parseFloat(value);
@@ -206,6 +222,36 @@ export function ProfileEditor({ profile, onSave, onCancel, isNew = false }: Prop
               <button type="button" class="btn" onClick={addTower}>
                 Add Tower
               </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Office/Retail Mix Target</label>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" style={{ fontSize: '10px' }}>Office %</label>
+                <input
+                  class="form-input"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={Math.round((formData.mixTarget?.officeShare ?? 0) * 100)}
+                  onInput={(e) => handleMixShareChange('officeShare', parseFloat((e.target as HTMLInputElement).value) || 0)}
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label" style={{ fontSize: '10px' }}>Retail %</label>
+                <input
+                  class="form-input"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={Math.round((formData.mixTarget?.retailShare ?? 0) * 100)}
+                  onInput={(e) => handleMixShareChange('retailShare', parseFloat((e.target as HTMLInputElement).value) || 0)}
+                />
+              </div>
             </div>
           </div>
 
