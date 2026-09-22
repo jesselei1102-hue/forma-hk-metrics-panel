@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'preact/hooks';
-import type { Profile, AreaMetricsData, StatusThresholds, TowerHeights } from './types';
+import { useState, useEffect, useCallback, useMemo } from 'preact/hooks';
+import type { Profile, AreaMetricsData, StatusThresholds, TowerHeights, MetricRow } from './types';
 import {
   loadProfiles,
   saveProfiles,
@@ -12,6 +12,64 @@ import { calculateMetrics } from './metrics';
 import { MetricsTable } from './components/MetricsTable';
 import { ProfileEditor } from './components/ProfileEditor';
 
+const VISIBILITY_STORAGE_KEY = 'forma-hk-metrics-visibility';
+const SEEN_CUSTOM_METRICS_KEY = 'forma-hk-metrics-seen-custom';
+
+type MetricVisibility = Record<string, boolean>;
+
+function loadVisibility(): MetricVisibility {
+  try {
+    const stored = localStorage.getItem(VISIBILITY_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveVisibility(visibility: MetricVisibility): void {
+  try {
+    localStorage.setItem(VISIBILITY_STORAGE_KEY, JSON.stringify(visibility));
+  } catch {
+    // localStorage unavailable
+  }
+}
+
+function loadSeenCustomMetrics(): Set<string> {
+  try {
+    const stored = localStorage.getItem(SEEN_CUSTOM_METRICS_KEY);
+    return new Set(stored ? JSON.parse(stored) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveSeenCustomMetrics(seen: Set<string>): void {
+  try {
+    localStorage.setItem(SEEN_CUSTOM_METRICS_KEY, JSON.stringify([...seen]));
+  } catch {
+    // localStorage unavailable
+  }
+}
+
+function getMetricKey(metric: MetricRow): string {
+  return metric.customMetricId ? `custom:${metric.customMetricId}` : `builtin:${metric.name}`;
+}
+
+const BUILTIN_METRIC_NAMES = [
+  'Site Area',
+  'GFA Total',
+  'Plot Ratio',
+  'Site Coverage',
+  'Office GFA',
+  'Commercial GFA',
+  'POS Area',
+];
+
+function isBuiltinMetric(metric: MetricRow): boolean {
+  if (metric.customMetricId) return false;
+  return BUILTIN_METRIC_NAMES.includes(metric.name) || metric.name.startsWith('Height (');
+}
+
 export function App() {
   const [profiles, setProfiles] = useState<Profile[]>(() => loadProfiles());
   const [selectedProfileId, setSelectedProfileId] = useState<string>(() => loadSelectedProfileId());
@@ -23,6 +81,9 @@ export function App() {
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
   const [towerHeights, setTowerHeights] = useState<TowerHeights>({});
   const [yellowEnabled, setYellowEnabled] = useState(true);
+  const [visibility, setVisibility] = useState<MetricVisibility>(() => loadVisibility());
+  const [seenCustomMetrics, setSeenCustomMetrics] = useState<Set<string>>(() => loadSeenCustomMetrics());
+  const [configExpanded, setConfigExpanded] = useState(false);
 
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId) || profiles[0];
 
@@ -47,6 +108,7 @@ export function App() {
           grossFloorArea: null,
           buildingCoverage: null,
           functionBreakdown: [],
+          customMetrics: [],
         });
         setError(
           'Not running inside Forma. Load this extension in Autodesk Forma to see live metrics.'
@@ -110,9 +172,46 @@ export function App() {
     setTowerHeights((prev) => ({ ...prev, [towerId]: value }));
   };
 
-  const metrics = areaMetrics
+  const allMetrics = areaMetrics
     ? calculateMetrics(areaMetrics, selectedProfile, thresholds, towerHeights)
     : [];
+
+  useEffect(() => {
+    if (allMetrics.length === 0) return;
+    const newSeen = new Set(seenCustomMetrics);
+    let changed = false;
+    for (const metric of allMetrics) {
+      if (metric.customMetricId && !seenCustomMetrics.has(metric.customMetricId)) {
+        newSeen.add(metric.customMetricId);
+        changed = true;
+      }
+    }
+    if (changed) {
+      setSeenCustomMetrics(newSeen);
+      saveSeenCustomMetrics(newSeen);
+    }
+  }, [allMetrics, seenCustomMetrics]);
+
+  const getVisibility = useCallback((metric: MetricRow): boolean => {
+    const key = getMetricKey(metric);
+    if (key in visibility) return visibility[key];
+    if (isBuiltinMetric(metric)) return true;
+    if (metric.customMetricId && seenCustomMetrics.has(metric.customMetricId)) {
+      return true;
+    }
+    return true;
+  }, [visibility, seenCustomMetrics]);
+
+  const handleVisibilityChange = useCallback((metric: MetricRow, checked: boolean) => {
+    const key = getMetricKey(metric);
+    const newVis = { ...visibility, [key]: checked };
+    setVisibility(newVis);
+    saveVisibility(newVis);
+  }, [visibility]);
+
+  const visibleMetrics = useMemo(() => {
+    return allMetrics.filter(getVisibility);
+  }, [allMetrics, getVisibility]);
 
   return (
     <div class="panel">
@@ -180,7 +279,39 @@ export function App() {
       {loading ? (
         <div class="loading">Loading metrics...</div>
       ) : (
-        <MetricsTable metrics={metrics} />
+        <>
+          <MetricsTable metrics={visibleMetrics} />
+          <div class="config-section">
+            <button
+              class="config-toggle"
+              onClick={() => setConfigExpanded(!configExpanded)}
+            >
+              {configExpanded ? '▾' : '▸'} Configure metrics
+            </button>
+            {configExpanded && (
+              <div class="config-content">
+                <div class="config-label">Metrics to show:</div>
+                {allMetrics.map((metric) => {
+                  const key = getMetricKey(metric);
+                  const checked = getVisibility(metric);
+                  return (
+                    <div class="checkbox-row" key={key}>
+                      <input
+                        type="checkbox"
+                        id={`vis-${key}`}
+                        checked={checked}
+                        onChange={(e) =>
+                          handleVisibilityChange(metric, (e.target as HTMLInputElement).checked)
+                        }
+                      />
+                      <label for={`vis-${key}`}>{metric.name}</label>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {!isForma && !loading && (

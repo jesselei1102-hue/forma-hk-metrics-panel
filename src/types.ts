@@ -29,11 +29,18 @@ export interface FunctionGfa {
   value: number;
 }
 
+export interface CustomMetricData {
+  id: string;
+  name: string;
+  actual: number | null;
+}
+
 export interface AreaMetricsData {
   siteArea: number | null;
   grossFloorArea: number | null;
   buildingCoverage: number | null;
   functionBreakdown: FunctionGfa[];
+  customMetrics: CustomMetricData[];
 }
 
 export type TowerHeights = Record<string, string>;
@@ -44,6 +51,7 @@ export interface MetricRow {
   limit: number | null;
   usagePercent: number | null;
   status: 'green' | 'yellow' | 'red' | 'none';
+  customMetricId?: string;
 }
 
 export type StatusThresholds = {

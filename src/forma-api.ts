@@ -1,5 +1,5 @@
 import { Forma } from 'forma-embedded-view-sdk/auto';
-import type { AreaMetricsData, FunctionGfa } from './types';
+import type { AreaMetricsData, FunctionGfa, CustomMetricData } from './types';
 
 function extractValue(val: number | 'UNABLE_TO_CALCULATE' | undefined): number | null {
   if (val === undefined || val === 'UNABLE_TO_CALCULATE') return null;
@@ -25,6 +25,40 @@ function extractFunctionBreakdown(
     }
   }
   return { total: hasValue ? sum : null, functions };
+}
+
+type SdkCustomMetric = {
+  id: string;
+  name: string;
+  unitOfMeasurement?: string;
+  functionBreakdown?: Array<{ value: number | 'UNABLE_TO_CALCULATE' }>;
+  value?: number | 'UNABLE_TO_CALCULATE';
+};
+
+function extractCustomMetrics(
+  customMetrics: SdkCustomMetric[] | undefined
+): CustomMetricData[] {
+  if (!customMetrics || customMetrics.length === 0) return [];
+  const result: CustomMetricData[] = [];
+  for (const metric of customMetrics) {
+    let actual: number | null = null;
+    if (metric.functionBreakdown && metric.functionBreakdown.length > 0) {
+      let sum = 0;
+      let hasValue = false;
+      for (const item of metric.functionBreakdown) {
+        const val = extractValue(item.value);
+        if (val !== null) {
+          sum += val;
+          hasValue = true;
+        }
+      }
+      if (hasValue) actual = sum;
+    } else if (metric.value !== undefined) {
+      actual = extractValue(metric.value);
+    }
+    result.push({ id: metric.id, name: metric.name, actual });
+  }
+  return result;
 }
 
 async function getBuildingPaths(): Promise<string[]> {
@@ -74,11 +108,16 @@ export async function fetchAreaMetrics(): Promise<AreaMetricsData> {
     );
     const buildingCoverage = extractValue(buildingMetrics.builtInMetrics.buildingCoverage?.value);
 
+    const customMetrics = extractCustomMetrics(
+      (buildingMetrics as { customMetrics?: SdkCustomMetric[] }).customMetrics
+    );
+
     return {
       siteArea,
       grossFloorArea: gfa,
       buildingCoverage,
       functionBreakdown,
+      customMetrics,
     };
   } catch (error) {
     console.error('Error fetching area metrics:', error);
@@ -87,6 +126,7 @@ export async function fetchAreaMetrics(): Promise<AreaMetricsData> {
       grossFloorArea: null,
       buildingCoverage: null,
       functionBreakdown: [],
+      customMetrics: [],
     };
   }
 }

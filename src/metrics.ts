@@ -176,6 +176,17 @@ export function calculateMetrics(
     });
   }
 
+  for (const customMetric of areaData.customMetrics) {
+    metrics.push({
+      name: customMetric.name,
+      actual: customMetric.actual,
+      limit: null,
+      usagePercent: null,
+      status: 'none',
+      customMetricId: customMetric.id,
+    });
+  }
+
   return metrics;
 }
 
