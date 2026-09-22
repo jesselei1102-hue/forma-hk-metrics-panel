@@ -26,8 +26,7 @@ export function MetricsTable({ metrics }: Props) {
             <td>
               <div class="metric-name">
                 <StatusDot status={metric.status} />
-                <span class="metric-name-en">{metric.name}</span>
-                {metric.nameZh && <span class="metric-name-zh">{metric.nameZh}</span>}
+                <span>{metric.name}</span>
               </div>
             </td>
             <td>

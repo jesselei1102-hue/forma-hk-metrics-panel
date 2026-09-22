@@ -167,16 +167,6 @@ body {
   gap: 6px;
 }
 
-.metric-name-en {
-  font-weight: 500;
-}
-
-.metric-name-zh {
-  font-size: 10px;
-  color: var(--color-text-muted);
-  margin-left: auto;
-}
-
 .status-dot {
   display: inline-block;
   width: 8px;

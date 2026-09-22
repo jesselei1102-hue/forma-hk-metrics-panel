@@ -60,7 +60,6 @@ export function calculateMetrics(
       : null;
   metrics.push({
     name: 'Site Area',
-    nameZh: '地盘面积',
     actual: siteAreaActual,
     limit: siteLimit,
     usagePercent: siteUsage,
@@ -75,7 +74,6 @@ export function calculateMetrics(
       : null;
   metrics.push({
     name: 'GFA Total',
-    nameZh: '总建筑面积',
     actual: gfaActual,
     limit: gfaLimit,
     usagePercent: gfaUsage,
@@ -94,7 +92,6 @@ export function calculateMetrics(
       : null;
   metrics.push({
     name: 'Plot Ratio',
-    nameZh: '地积比率',
     actual: prActual,
     limit: prLimit,
     usagePercent: prUsage,
@@ -113,7 +110,6 @@ export function calculateMetrics(
       : null;
   metrics.push({
     name: 'Site Coverage',
-    nameZh: '建筑覆盖率',
     actual: scActual,
     limit: coverageLimit,
     usagePercent: scUsage,
@@ -131,7 +127,6 @@ export function calculateMetrics(
         : null;
     metrics.push({
       name: `Height (${tower.id})`,
-      nameZh: `高度 (${tower.id})`,
       actual: parsedHeight,
       limit: heightLimit,
       usagePercent: heightUsage,
@@ -152,7 +147,6 @@ export function calculateMetrics(
         : null;
     metrics.push({
       name: 'Office GFA',
-      nameZh: '办公面积',
       actual: officeGfa,
       limit: officeTargetGfa,
       usagePercent: officeUsage,
@@ -165,7 +159,6 @@ export function calculateMetrics(
         : null;
     metrics.push({
       name: 'Retail GFA',
-      nameZh: '零售面积',
       actual: retailGfa,
       limit: retailTargetGfa,
       usagePercent: retailUsage,
@@ -176,7 +169,6 @@ export function calculateMetrics(
   if (profile.minPosM2 !== null && profile.minPosM2 !== undefined) {
     metrics.push({
       name: 'POS Area',
-      nameZh: '公共空间',
       actual: null,
       limit: profile.minPosM2,
       usagePercent: null,

@@ -40,7 +40,6 @@ export type TowerHeights = Record<string, string>;
 
 export interface MetricRow {
   name: string;
-  nameZh?: string;
   actual: number | null;
   limit: number | null;
   usagePercent: number | null;
