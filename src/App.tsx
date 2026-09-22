@@ -11,6 +11,7 @@ import { fetchAreaMetrics, isFormaEnvironment } from './forma-api';
 import { calculateMetrics } from './metrics';
 import { MetricsTable } from './components/MetricsTable';
 import { ProfileEditor } from './components/ProfileEditor';
+import { getFirstScheduleHint } from './bpr-first-schedule';
 
 const VISIBILITY_STORAGE_KEY = 'forma-hk-metrics-visibility';
 const SEEN_CUSTOM_METRICS_KEY = 'forma-hk-metrics-seen-custom';
@@ -450,11 +451,26 @@ export function App() {
 
       {error && <div class="error">{error}</div>}
 
+      <div class="gfa-disclaimer">
+        <strong>Early Design Aid</strong> — Forma GFA is modelling area, not Buildings Department
+        accountable GFA (B(P)R reg 23 / PNAP APP-2). Traffic lights compare against profile and/or
+        indicative B(P)R First Schedule caps only. Not a Cap. 123 statutory compliance check.
+      </div>
+
       {loading ? (
         <div class="loading">Loading metrics...</div>
       ) : (
         <>
-          <MetricsTable metrics={visibleMetrics} />
+          <MetricsTable
+            metrics={visibleMetrics}
+            liveSiteArea={areaMetrics?.siteArea}
+            profileSiteArea={selectedProfile.siteAreaM2}
+            bprHint={getFirstScheduleHint(
+              selectedProfile.siteClass,
+              selectedProfile.useType,
+              selectedProfile.buildingHeightM
+            )}
+          />
           <div class="config-section">
             <button
               class="config-toggle"

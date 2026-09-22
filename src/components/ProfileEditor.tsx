@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'preact/hooks';
-import type { Profile, TowerLimit, MixTargetEntry } from '../types';
+import type { Profile, TowerLimit, MixTargetEntry, SiteClass, UseType } from '../types';
 
 interface Props {
   profile: Profile;
@@ -214,6 +214,68 @@ export function ProfileEditor({ profile, onSave, onCancel, isNew = false }: Prop
                 }
               />
             </div>
+          </div>
+
+          <div class="form-group bpr-section">
+            <label class="form-label">B(P)R First Schedule (optional)</label>
+            <div class="bpr-hint">
+              Set these to see Cap. 123F statutory intensity caps alongside profile limits.
+              Building height is in metres (not mPD).
+            </div>
+            <div class="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+              <div class="form-group" style={{ marginBottom: 0 }}>
+                <label class="form-label-sm">Site Class</label>
+                <select
+                  class="form-input"
+                  value={formData.siteClass ?? ''}
+                  onChange={(e) => {
+                    const val = (e.target as HTMLSelectElement).value;
+                    handleChange('siteClass', val === '' ? null : val as SiteClass);
+                  }}
+                >
+                  <option value="">— Not set —</option>
+                  <option value="A">Class A</option>
+                  <option value="B">Class B</option>
+                  <option value="C">Class C</option>
+                </select>
+              </div>
+              <div class="form-group" style={{ marginBottom: 0 }}>
+                <label class="form-label-sm">Use Type</label>
+                <select
+                  class="form-input"
+                  value={formData.useType ?? ''}
+                  onChange={(e) => {
+                    const val = (e.target as HTMLSelectElement).value;
+                    handleChange('useType', val === '' ? null : val as UseType);
+                  }}
+                >
+                  <option value="">— Not set —</option>
+                  <option value="domestic">Domestic</option>
+                  <option value="non-domestic">Non-domestic</option>
+                  <option value="composite">Composite</option>
+                </select>
+              </div>
+              <div class="form-group" style={{ marginBottom: 0 }}>
+                <label class="form-label-sm">Building Height (m)</label>
+                <input
+                  class="form-input"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={formData.buildingHeightM ?? ''}
+                  onInput={(e) =>
+                    handleChange('buildingHeightM', parseNumber((e.target as HTMLInputElement).value))
+                  }
+                  placeholder="e.g. 70"
+                />
+              </div>
+            </div>
+            {formData.useType === 'composite' && (
+              <div class="bpr-warning">
+                Composite buildings require manual B(P)R calculation per reg 21(2).
+                First Schedule lookup not available.
+              </div>
+            )}
           </div>
 
           <div class="form-group">

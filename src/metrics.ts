@@ -1,4 +1,5 @@
-import type { MetricRow, Profile, AreaMetricsData, StatusThresholds, TowerHeights, FunctionGfa, MixTargetEntry } from './types';
+import type { MetricRow, Profile, AreaMetricsData, StatusThresholds, TowerHeights, FunctionGfa, MixTargetEntry, LimitSource } from './types';
+import { lookupFirstSchedule, type FirstScheduleResult } from './bpr-first-schedule';
 
 function calculateStatus(
   usagePercent: number | null,
@@ -39,6 +40,26 @@ function calculateMixTargetActual(
   return sum;
 }
 
+function determineEffectiveLimit(
+  profileLimit: number | null,
+  bprLimit: number | null
+): { limit: number | null; source: LimitSource | null } {
+  if (profileLimit !== null && bprLimit !== null) {
+    if (profileLimit <= bprLimit) {
+      return { limit: profileLimit, source: 'stricter' };
+    } else {
+      return { limit: bprLimit, source: 'stricter' };
+    }
+  }
+  if (profileLimit !== null) {
+    return { limit: profileLimit, source: 'profile' };
+  }
+  if (bprLimit !== null) {
+    return { limit: bprLimit, source: 'bpr' };
+  }
+  return { limit: null, source: null };
+}
+
 export function calculateMetrics(
   areaData: AreaMetricsData,
   profile: Profile,
@@ -46,6 +67,12 @@ export function calculateMetrics(
   towerHeights: TowerHeights
 ): MetricRow[] {
   const metrics: MetricRow[] = [];
+
+  const bprResult: FirstScheduleResult | null = lookupFirstSchedule({
+    siteClass: profile.siteClass ?? undefined,
+    useType: profile.useType ?? undefined,
+    buildingHeightM: profile.buildingHeightM ?? undefined,
+  });
 
   const siteAreaActual = areaData.siteArea;
   const siteLimit = profile.siteAreaM2;
@@ -59,6 +86,10 @@ export function calculateMetrics(
     limit: siteLimit,
     usagePercent: siteUsage,
     status: calculateStatus(siteUsage, thresholds),
+    profileLimit: siteLimit,
+    bprLimit: null,
+    bprBandLabel: null,
+    limitSource: siteLimit !== null ? 'profile' : null,
   });
 
   const gfaActual = areaData.grossFloorArea;
@@ -73,6 +104,10 @@ export function calculateMetrics(
     limit: gfaLimit,
     usagePercent: gfaUsage,
     status: calculateStatus(gfaUsage, thresholds),
+    profileLimit: gfaLimit,
+    bprLimit: null,
+    bprBandLabel: null,
+    limitSource: gfaLimit !== null ? 'profile' : null,
   });
 
   const siteForRatio = profile.siteAreaM2;
@@ -80,35 +115,47 @@ export function calculateMetrics(
     gfaActual !== null && siteForRatio !== null && siteForRatio > 0
       ? gfaActual / siteForRatio
       : null;
-  const prLimit = profile.maxPr;
+  const prProfileLimit = profile.maxPr;
+  const prBprLimit = bprResult?.maxPr ?? null;
+  const prEffective = determineEffectiveLimit(prProfileLimit, prBprLimit);
   const prUsage =
-    prActual !== null && prLimit !== null && prLimit > 0
-      ? (prActual / prLimit) * 100
+    prActual !== null && prEffective.limit !== null && prEffective.limit > 0
+      ? (prActual / prEffective.limit) * 100
       : null;
   metrics.push({
     name: 'Plot Ratio',
     actual: prActual,
-    limit: prLimit,
+    limit: prEffective.limit,
     usagePercent: prUsage,
     status: calculateStatus(prUsage, thresholds),
+    profileLimit: prProfileLimit,
+    bprLimit: prBprLimit,
+    bprBandLabel: bprResult?.bandLabel ?? null,
+    limitSource: prEffective.source,
   });
 
   const coverageActual = areaData.buildingCoverage;
-  const coverageLimit = profile.maxSc;
+  const scProfileLimit = profile.maxSc;
+  const scBprLimit = bprResult?.maxSc ?? null;
+  const scEffective = determineEffectiveLimit(scProfileLimit, scBprLimit);
   const scActual =
     coverageActual !== null && siteForRatio !== null && siteForRatio > 0
       ? coverageActual / siteForRatio
       : null;
   const scUsage =
-    scActual !== null && coverageLimit !== null && coverageLimit > 0
-      ? (scActual / coverageLimit) * 100
+    scActual !== null && scEffective.limit !== null && scEffective.limit > 0
+      ? (scActual / scEffective.limit) * 100
       : null;
   metrics.push({
     name: 'Site Coverage',
     actual: scActual,
-    limit: coverageLimit,
+    limit: scEffective.limit,
     usagePercent: scUsage,
     status: calculateStatus(scUsage, thresholds),
+    profileLimit: scProfileLimit,
+    bprLimit: scBprLimit,
+    bprBandLabel: bprResult?.bandLabel ?? null,
+    limitSource: scEffective.source,
   });
 
   for (const tower of profile.towers) {

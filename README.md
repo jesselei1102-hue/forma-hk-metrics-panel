@@ -8,6 +8,35 @@ A Forma Site Design extension that displays early/pre-design planning metrics fo
 >
 > Early design aid — not a statutory compliance check.
 
+## Cap. 123 / Cap. 123F Integration
+
+The panel supports **dual-limit comparison** for Plot Ratio and Site Coverage:
+
+### Profile Limits (OZP / Lease / Brief)
+Your existing profile limits from OZP zoning, lease conditions, or project briefs remain the **primary** reference. These are manually entered in the Profile Editor.
+
+### B(P)R First Schedule Limits (Cap. 123F)
+Cap. 123F Building (Planning) Regulations First Schedule defines **statutory intensity ceilings** based on:
+- **Site Class** (A, B, or C per reg 18A)
+- **Use Type** (domestic or non-domestic)
+- **Building Height** in metres (NOT mPD)
+
+When you set all three in the Profile Editor, the panel will:
+1. Look up the corresponding First Schedule limits
+2. Show both Profile (P) and B(P)R (B) limits for PR and SC
+3. Highlight the **stricter** limit and compute status against it
+
+### Important Notes
+
+- **Building height** is in **metres of building**, not mPD (metres Principal Datum). Tower mPD limits in the profile are for height compliance, not First Schedule lookup.
+- **Composite** buildings (mixed domestic/non-domestic) require manual calculation per reg 21(2) — the panel does not auto-calculate these.
+- **Forma GFA ≠ BD GFA**: Forma's gross floor area is modelling area, not Buildings Department accountable GFA under B(P)R reg 23 / PNAP APP-2. GFA concessions, exclusions, and bonus provisions are not applied.
+- Traffic lights indicate **indicative** compliance only — never interpret a green light as Cap. 123 statutory approval.
+
+### Official Sources
+- [Cap. 123F Building (Planning) Regulations](https://www.elegislation.gov.hk/hk/cap123F)
+- [HKLII Cap. 123F First Schedule](https://hklii.hk/en/legis/reg/123F/sch1)
+
 ## Features
 
 - **Profile Management**: Select from built-in profiles (Central Yard, Blank) or create custom profiles
@@ -169,19 +198,27 @@ forma-hk-metrics-panel/
 Custom profiles follow this structure:
 
 ```typescript
+type SiteClass = 'A' | 'B' | 'C';
+type UseType = 'domestic' | 'non-domestic' | 'composite';
+
 interface Profile {
   id: string;              // Unique identifier
   projectName: string;     // Display name
   siteAreaM2: number | null;    // Site area limit (m²)
   maxGfaM2: number | null;      // Max GFA limit (m²)
-  maxPr: number | null;         // Max plot ratio
-  maxSc: number | null;         // Max site coverage (0-1)
+  maxPr: number | null;         // Max plot ratio (OZP/lease)
+  maxSc: number | null;         // Max site coverage 0-1 (OZP/lease)
   gfMpd: number;                // Ground floor mPD
-  towers: TowerLimit[];         // Tower height limits
-  useMix?: boolean;             // Use mix tracking (P1)
+  towers: TowerLimit[];         // Tower height limits (mPD)
+  mixTargets?: MixTargetEntry[]; // GFA mix targets
   minPosM2?: number | null;     // Min POS area (m²)
   minParking?: number | null;   // Min parking spots
   sourceNote?: string;          // Reference note
+
+  // B(P)R First Schedule fields (optional)
+  siteClass?: SiteClass | null;      // B(P)R reg 18A site class
+  useType?: UseType | null;          // Domestic / non-domestic / composite
+  buildingHeightM?: number | null;   // Building height in metres (NOT mPD)
 }
 
 interface TowerLimit {
