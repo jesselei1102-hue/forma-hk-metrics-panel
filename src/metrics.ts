@@ -1,4 +1,4 @@
-import type { MetricRow, Profile, AreaMetricsData, StatusThresholds, TowerHeights, FunctionGfa } from './types';
+import type { MetricRow, Profile, AreaMetricsData, StatusThresholds, TowerHeights, FunctionGfa, MixTargetEntry } from './types';
 
 function calculateStatus(
   usagePercent: number | null,
@@ -21,27 +21,22 @@ function calculateMixStatus(
   return 'red';
 }
 
-function matchesOffice(name: string): boolean {
-  const lower = name.toLowerCase();
-  return lower.includes('office') || lower.includes('办公');
+function matchesMixTarget(functionName: string, matchTokens: string[]): boolean {
+  const lower = functionName.toLowerCase();
+  return matchTokens.some((token) => lower.includes(token.toLowerCase()));
 }
 
-function matchesRetail(name: string): boolean {
-  const lower = name.toLowerCase();
-  return lower.includes('retail') || lower.includes('commercial') || lower.includes('零售') || lower.includes('商业');
-}
-
-function extractMixGfa(breakdown: FunctionGfa[]): { office: number | null; retail: number | null } {
-  let office: number | null = null;
-  let retail: number | null = null;
+function calculateMixTargetActual(
+  breakdown: FunctionGfa[],
+  target: MixTargetEntry
+): number | null {
+  let sum: number | null = null;
   for (const fn of breakdown) {
-    if (matchesOffice(fn.functionName)) {
-      office = (office ?? 0) + fn.value;
-    } else if (matchesRetail(fn.functionName)) {
-      retail = (retail ?? 0) + fn.value;
+    if (matchesMixTarget(fn.functionName, target.match)) {
+      sum = (sum ?? 0) + fn.value;
     }
   }
-  return { office, retail };
+  return sum;
 }
 
 export function calculateMetrics(
@@ -134,36 +129,22 @@ export function calculateMetrics(
     });
   }
 
-  if (profile.useMix || profile.mixTarget) {
-    const { office: officeGfa, retail: retailGfa } = extractMixGfa(areaData.functionBreakdown);
-    const mixTarget = profile.mixTarget;
-
-    const officeTargetGfa = mixTarget && gfaActual !== null ? gfaActual * mixTarget.officeShare : null;
-    const retailTargetGfa = mixTarget && gfaActual !== null ? gfaActual * mixTarget.retailShare : null;
-
-    const officeUsage =
-      officeGfa !== null && officeTargetGfa !== null && officeTargetGfa > 0
-        ? (officeGfa / officeTargetGfa) * 100
-        : null;
-    metrics.push({
-      name: 'Office GFA',
-      actual: officeGfa,
-      limit: officeTargetGfa,
-      usagePercent: officeUsage,
-      status: calculateMixStatus(officeUsage, thresholds),
-    });
-
-    const retailUsage =
-      retailGfa !== null && retailTargetGfa !== null && retailTargetGfa > 0
-        ? (retailGfa / retailTargetGfa) * 100
-        : null;
-    metrics.push({
-      name: 'Retail GFA',
-      actual: retailGfa,
-      limit: retailTargetGfa,
-      usagePercent: retailUsage,
-      status: calculateMixStatus(retailUsage, thresholds),
-    });
+  if (profile.mixTargets && profile.mixTargets.length > 0) {
+    for (const target of profile.mixTargets) {
+      const actual = calculateMixTargetActual(areaData.functionBreakdown, target);
+      const limit = gfaActual !== null && target.share > 0 ? gfaActual * target.share : null;
+      const usage =
+        actual !== null && limit !== null && limit > 0
+          ? (actual / limit) * 100
+          : null;
+      metrics.push({
+        name: target.label,
+        actual,
+        limit,
+        usagePercent: usage,
+        status: calculateMixStatus(usage, thresholds),
+      });
+    }
   }
 
   if (profile.minPosM2 !== null && profile.minPosM2 !== undefined) {

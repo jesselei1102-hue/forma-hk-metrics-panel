@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'preact/hooks';
-import type { Profile, AreaMetricsData, StatusThresholds, TowerHeights, MetricRow } from './types';
+import type { Profile, AreaMetricsData, StatusThresholds, TowerHeights, MetricRow, MixTargetEntry } from './types';
 import {
   loadProfiles,
   saveProfiles,
@@ -55,19 +55,20 @@ function getMetricKey(metric: MetricRow): string {
   return metric.customMetricId ? `custom:${metric.customMetricId}` : `builtin:${metric.name}`;
 }
 
-const BUILTIN_METRIC_NAMES = [
+const CORE_METRIC_NAMES = [
   'Site Area',
   'GFA Total',
   'Plot Ratio',
   'Site Coverage',
-  'Office GFA',
-  'Retail GFA',
   'POS Area',
 ];
 
-function isBuiltinMetric(metric: MetricRow): boolean {
+function isCoreOrMixMetric(metric: MetricRow, mixTargetLabels: string[]): boolean {
   if (metric.customMetricId) return false;
-  return BUILTIN_METRIC_NAMES.includes(metric.name) || metric.name.startsWith('Height (');
+  if (CORE_METRIC_NAMES.includes(metric.name)) return true;
+  if (metric.name.startsWith('Height (')) return true;
+  if (mixTargetLabels.includes(metric.name)) return true;
+  return false;
 }
 
 export function App() {
@@ -84,6 +85,7 @@ export function App() {
   const [visibility, setVisibility] = useState<MetricVisibility>(() => loadVisibility());
   const [seenCustomMetrics, setSeenCustomMetrics] = useState<Set<string>>(() => loadSeenCustomMetrics());
   const [configExpanded, setConfigExpanded] = useState(false);
+  const [mixTargetsExpanded, setMixTargetsExpanded] = useState(false);
 
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId) || profiles[0];
 
@@ -172,27 +174,91 @@ export function App() {
     setTowerHeights((prev) => ({ ...prev, [towerId]: value }));
   };
 
-  const handleMixTargetChange = (field: 'officeShare' | 'retailShare', percentValue: number) => {
-    const clamped = Math.max(0, Math.min(100, percentValue));
-    const share = clamped / 100;
-    const otherShare = (100 - clamped) / 100;
-
-    const newMixTarget = field === 'officeShare'
-      ? { officeShare: share, retailShare: otherShare }
-      : { officeShare: otherShare, retailShare: share };
-
+  const updateProfileMixTargets = useCallback((newMixTargets: MixTargetEntry[]) => {
     const updatedProfile: Profile = {
       ...selectedProfile,
-      useMix: true,
-      mixTarget: newMixTarget,
+      mixTargets: newMixTargets,
     };
-
     const updatedProfiles = profiles.map((p) =>
       p.id === selectedProfile.id ? updatedProfile : p
     );
     setProfiles(updatedProfiles);
     saveProfiles(updatedProfiles);
-  };
+  }, [selectedProfile, profiles]);
+
+  const handleMixTargetUpdate = useCallback((index: number, field: keyof MixTargetEntry, value: string | string[] | number) => {
+    const mixTargets = selectedProfile.mixTargets || [];
+    const updated = mixTargets.map((t, i) => {
+      if (i !== index) return t;
+      if (field === 'share') {
+        const percent = typeof value === 'number' ? value : parseFloat(value as string) || 0;
+        return { ...t, share: Math.max(0, Math.min(100, percent)) / 100 };
+      }
+      if (field === 'match') {
+        const matchArray = typeof value === 'string'
+          ? value.split(',').map((s) => s.trim()).filter(Boolean)
+          : value as string[];
+        return { ...t, match: matchArray };
+      }
+      return { ...t, [field]: value };
+    });
+    updateProfileMixTargets(updated);
+  }, [selectedProfile, updateProfileMixTargets]);
+
+  const handleAddMixTarget = useCallback(() => {
+    const mixTargets = selectedProfile.mixTargets || [];
+    const newTarget: MixTargetEntry = {
+      id: `mix-${Date.now()}`,
+      label: 'New Mix Target',
+      match: [],
+      share: 0,
+    };
+    updateProfileMixTargets([...mixTargets, newTarget]);
+  }, [selectedProfile, updateProfileMixTargets]);
+
+  const handleRemoveMixTarget = useCallback((index: number) => {
+    const mixTargets = selectedProfile.mixTargets || [];
+    updateProfileMixTargets(mixTargets.filter((_, i) => i !== index));
+  }, [selectedProfile, updateProfileMixTargets]);
+
+  const handleAddFromFunction = useCallback((functionName: string) => {
+    const mixTargets = selectedProfile.mixTargets || [];
+    const newTarget: MixTargetEntry = {
+      id: `mix-${Date.now()}`,
+      label: `${functionName} GFA`,
+      match: [functionName.toLowerCase()],
+      share: 0,
+    };
+    updateProfileMixTargets([...mixTargets, newTarget]);
+  }, [selectedProfile, updateProfileMixTargets]);
+
+  const mixTargetShareSum = useMemo(() => {
+    const targets = selectedProfile.mixTargets || [];
+    return targets.reduce((sum, t) => sum + t.share, 0);
+  }, [selectedProfile.mixTargets]);
+
+  const handleNormalizeMixTargets = useCallback(() => {
+    const mixTargets = selectedProfile.mixTargets || [];
+    if (mixTargets.length === 0 || mixTargetShareSum === 0) return;
+    const normalized = mixTargets.map((t) => ({
+      ...t,
+      share: t.share / mixTargetShareSum,
+    }));
+    updateProfileMixTargets(normalized);
+  }, [selectedProfile, mixTargetShareSum, updateProfileMixTargets]);
+
+  const availableFunctions = useMemo(() => {
+    if (!areaMetrics) return [];
+    const usedMatches = new Set<string>();
+    for (const target of selectedProfile.mixTargets || []) {
+      for (const m of target.match) {
+        usedMatches.add(m.toLowerCase());
+      }
+    }
+    return areaMetrics.functionBreakdown
+      .map((f) => f.functionName)
+      .filter((name) => !usedMatches.has(name.toLowerCase()));
+  }, [areaMetrics, selectedProfile.mixTargets]);
 
   const allMetrics = areaMetrics
     ? calculateMetrics(areaMetrics, selectedProfile, thresholds, towerHeights)
@@ -214,15 +280,19 @@ export function App() {
     }
   }, [allMetrics, seenCustomMetrics]);
 
+  const mixTargetLabels = useMemo(() => {
+    return (selectedProfile.mixTargets || []).map((t) => t.label);
+  }, [selectedProfile.mixTargets]);
+
   const getVisibility = useCallback((metric: MetricRow): boolean => {
     const key = getMetricKey(metric);
     if (key in visibility) return visibility[key];
-    if (isBuiltinMetric(metric)) return true;
+    if (isCoreOrMixMetric(metric, mixTargetLabels)) return true;
     if (metric.customMetricId && seenCustomMetrics.has(metric.customMetricId)) {
       return true;
     }
     return true;
-  }, [visibility, seenCustomMetrics]);
+  }, [visibility, seenCustomMetrics, mixTargetLabels]);
 
   const handleVisibilityChange = useCallback((metric: MetricRow, checked: boolean) => {
     const key = getMetricKey(metric);
@@ -279,35 +349,87 @@ export function App() {
         </div>
       )}
 
-      {(selectedProfile.useMix || selectedProfile.mixTarget) && (
-        <div class="mix-target-section">
-          <div class="mix-target-label">Mix target</div>
-          <div class="mix-target-row">
-            <div class="mix-target-input">
-              <label>Office %</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                value={Math.round((selectedProfile.mixTarget?.officeShare ?? 0) * 100)}
-                onInput={(e) => handleMixTargetChange('officeShare', parseFloat((e.target as HTMLInputElement).value) || 0)}
-              />
+      <div class="mix-targets-section">
+        <button
+          class="config-toggle"
+          onClick={() => setMixTargetsExpanded(!mixTargetsExpanded)}
+        >
+          {mixTargetsExpanded ? '▾' : '▸'} Mix targets
+          {(selectedProfile.mixTargets?.length ?? 0) > 0 && (
+            <span class="mix-count">({selectedProfile.mixTargets?.length})</span>
+          )}
+        </button>
+        {mixTargetsExpanded && (
+          <div class="mix-targets-content">
+            {(selectedProfile.mixTargets || []).map((target, index) => (
+              <div class="mix-target-entry" key={target.id}>
+                <div class="mix-target-entry-row">
+                  <input
+                    type="text"
+                    class="mix-target-label-input"
+                    value={target.label}
+                    onInput={(e) => handleMixTargetUpdate(index, 'label', (e.target as HTMLInputElement).value)}
+                    placeholder="Label"
+                  />
+                  <input
+                    type="text"
+                    class="mix-target-match-input"
+                    value={target.match.join(', ')}
+                    onInput={(e) => handleMixTargetUpdate(index, 'match', (e.target as HTMLInputElement).value)}
+                    placeholder="Match keywords"
+                  />
+                  <input
+                    type="number"
+                    class="mix-target-share-input"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={Math.round(target.share * 100)}
+                    onInput={(e) => handleMixTargetUpdate(index, 'share', (e.target as HTMLInputElement).value)}
+                  />
+                  <span class="mix-target-percent">%</span>
+                  <button
+                    class="btn btn-icon-sm"
+                    onClick={() => handleRemoveMixTarget(index)}
+                    title="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+            <div class="mix-targets-actions">
+              <button class="btn btn-sm" onClick={handleAddMixTarget}>
+                + Add target
+              </button>
+              {Math.abs(mixTargetShareSum - 1) > 0.001 && (selectedProfile.mixTargets?.length ?? 0) > 0 && (
+                <div class="mix-sum-hint">
+                  Sum: {Math.round(mixTargetShareSum * 100)}%
+                  <button class="btn btn-sm" onClick={handleNormalizeMixTargets}>
+                    Normalize
+                  </button>
+                </div>
+              )}
             </div>
-            <div class="mix-target-input">
-              <label>Retail %</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                value={Math.round((selectedProfile.mixTarget?.retailShare ?? 0) * 100)}
-                onInput={(e) => handleMixTargetChange('retailShare', parseFloat((e.target as HTMLInputElement).value) || 0)}
-              />
-            </div>
+            {availableFunctions.length > 0 && (
+              <div class="mix-functions-hint">
+                <span class="hint-label">Add from Forma:</span>
+                <div class="function-chips">
+                  {availableFunctions.slice(0, 5).map((fn) => (
+                    <button
+                      key={fn}
+                      class="function-chip"
+                      onClick={() => handleAddFromFunction(fn)}
+                    >
+                      + {fn}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <div class="toolbar">
         <div class="checkbox-row">

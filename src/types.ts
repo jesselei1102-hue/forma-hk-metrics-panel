@@ -3,7 +3,14 @@ export interface TowerLimit {
   maxBhMpd: number;
 }
 
-export interface MixTarget {
+export interface MixTargetEntry {
+  id: string;
+  label: string;
+  match: string[];
+  share: number;
+}
+
+export interface LegacyMixTarget {
   officeShare: number;
   retailShare: number;
 }
@@ -17,8 +24,9 @@ export interface Profile {
   maxSc: number | null;
   gfMpd: number;
   towers: TowerLimit[];
+  mixTargets?: MixTargetEntry[];
+  mixTarget?: LegacyMixTarget;
   useMix?: boolean;
-  mixTarget?: MixTarget;
   minPosM2?: number | null;
   minParking?: number | null;
   sourceNote?: string;
