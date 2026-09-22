@@ -3,12 +3,14 @@ import type { AreaMetricsData } from './types';
 
 function extractValue(val: number | 'UNABLE_TO_CALCULATE' | undefined): number | null {
   if (val === undefined || val === 'UNABLE_TO_CALCULATE') return null;
+  if (typeof val !== 'number' || !Number.isFinite(val)) return null;
   return val;
 }
 
 function sumFunctionBreakdown(
-  breakdown: Array<{ value: number | 'UNABLE_TO_CALCULATE' }>
+  breakdown: Array<{ value: number | 'UNABLE_TO_CALCULATE' }> | undefined
 ): number | null {
+  if (!breakdown || breakdown.length === 0) return null;
   let sum = 0;
   let hasValue = false;
   for (const item of breakdown) {
@@ -21,6 +23,17 @@ function sumFunctionBreakdown(
   return hasValue ? sum : null;
 }
 
+function extractGrossFloorArea(gfa: {
+  value?: number | 'UNABLE_TO_CALCULATE';
+  functionBreakdown?: Array<{ value: number | 'UNABLE_TO_CALCULATE' }>;
+}): number | null {
+  const directValue = extractValue(gfa.value);
+  if (directValue !== null) {
+    return directValue;
+  }
+  return sumFunctionBreakdown(gfa.functionBreakdown);
+}
+
 export async function fetchAreaMetrics(): Promise<AreaMetricsData> {
   try {
     const sitePaths = await Forma.geometry.getPathsByCategory({
@@ -31,12 +44,13 @@ export async function fetchAreaMetrics(): Promise<AreaMetricsData> {
       paths: sitePaths.length > 0 ? sitePaths : undefined,
     });
 
-    const gfa = sumFunctionBreakdown(metrics.builtInMetrics.grossFloorArea.functionBreakdown);
+    const gfa = extractGrossFloorArea(metrics.builtInMetrics.grossFloorArea);
+    const buildingCoverage = extractValue(metrics.builtInMetrics.buildingCoverage?.value);
 
     return {
       siteArea: extractValue(metrics.builtInMetrics.siteArea?.value),
       grossFloorArea: gfa,
-      buildingCoverage: extractValue(metrics.builtInMetrics.buildingCoverage?.value),
+      buildingCoverage: buildingCoverage,
     };
   } catch (error) {
     console.error('Error fetching area metrics:', error);
