@@ -1,8 +1,8 @@
 :root {
   --color-green: #22c55e;
-  --color-yellow: #eab308;
+  --color-yellow: #f59e0b;
   --color-red: #ef4444;
-  --color-gray: #9ca3af;
+  --color-gray: #d1d5db;
   --color-border: #e5e7eb;
   --color-bg: #ffffff;
   --color-bg-secondary: #f9fafb;
@@ -181,6 +181,7 @@ body {
 
 .status-dot.status-yellow {
   background: var(--color-yellow);
+  box-shadow: 0 0 0 1px #d97706;
 }
 
 .status-dot.status-red {

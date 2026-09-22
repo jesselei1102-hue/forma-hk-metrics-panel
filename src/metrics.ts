@@ -63,7 +63,7 @@ export function calculateMetrics(
     actual: siteAreaActual,
     limit: siteLimit,
     usagePercent: siteUsage,
-    status: 'none',
+    status: calculateStatus(siteUsage, thresholds),
   });
 
   const gfaActual = areaData.grossFloorArea;
