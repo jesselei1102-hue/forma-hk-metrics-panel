@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'preact/hooks';
-import type { Profile, AreaMetricsData, StatusThresholds } from './types';
+import type { Profile, AreaMetricsData, StatusThresholds, TowerHeights } from './types';
 import {
   loadProfiles,
   saveProfiles,
@@ -22,7 +22,7 @@ export function App() {
   const [isForma, setIsForma] = useState(false);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
-  const [manualRoofMpd, setManualRoofMpd] = useState<string>('');
+  const [towerHeights, setTowerHeights] = useState<TowerHeights>({});
   const [yellowEnabled, setYellowEnabled] = useState(true);
 
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId) || profiles[0];
@@ -47,6 +47,7 @@ export function App() {
           siteArea: null,
           grossFloorArea: null,
           buildingCoverage: null,
+          functionBreakdown: [],
         });
         setError(
           'Not running inside Forma. Load this extension in Autodesk Forma to see live metrics.'
@@ -106,9 +107,12 @@ export function App() {
     setIsCreatingProfile(false);
   };
 
-  const parsedRoofMpd = manualRoofMpd ? parseFloat(manualRoofMpd) : null;
+  const handleTowerHeightChange = (towerId: string, value: string) => {
+    setTowerHeights((prev) => ({ ...prev, [towerId]: value }));
+  };
+
   const metrics = areaMetrics
-    ? calculateMetrics(areaMetrics, selectedProfile, thresholds, parsedRoofMpd)
+    ? calculateMetrics(areaMetrics, selectedProfile, thresholds, towerHeights)
     : [];
 
   return (
@@ -142,17 +146,19 @@ export function App() {
 
       {selectedProfile.towers.length > 0 && (
         <div class="height-input-section">
-          <div class="height-input-row">
-            <label>Manual roof mPD:</label>
-            <input
-              type="number"
-              step="0.1"
-              value={manualRoofMpd}
-              onInput={(e) => setManualRoofMpd((e.target as HTMLInputElement).value)}
-              placeholder="Enter height"
-            />
-            <span>mPD</span>
-          </div>
+          {selectedProfile.towers.map((tower) => (
+            <div class="height-input-row" key={tower.id}>
+              <label>{tower.id}:</label>
+              <input
+                type="number"
+                step="0.1"
+                value={towerHeights[tower.id] || ''}
+                onInput={(e) => handleTowerHeightChange(tower.id, (e.target as HTMLInputElement).value)}
+                placeholder={`≤${tower.maxBhMpd}`}
+              />
+              <span>mPD</span>
+            </div>
+          ))}
         </div>
       )}
 

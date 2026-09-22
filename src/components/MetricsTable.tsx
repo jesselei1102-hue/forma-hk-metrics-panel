@@ -45,7 +45,7 @@ export function MetricsTable({ metrics }: Props) {
                 ? formatValue(metric.actual, 3)
                 : formatValue(metric.actual, 0)}
               {metric.name.includes('Height') && metric.actual !== null && ' mPD'}
-              {(metric.name.includes('Area') || metric.name === 'GFA Total') &&
+              {(metric.name.includes('Area') || metric.name.includes('GFA')) &&
                 metric.actual !== null &&
                 ' m²'}
             </td>
@@ -54,7 +54,7 @@ export function MetricsTable({ metrics }: Props) {
                 ? formatValue(metric.limit, 3)
                 : formatValue(metric.limit, 0)}
               {metric.name.includes('Height') && metric.limit !== null && ' mPD'}
-              {(metric.name.includes('Area') || metric.name === 'GFA Total') &&
+              {(metric.name.includes('Area') || metric.name.includes('GFA')) &&
                 metric.limit !== null &&
                 ' m²'}
             </td>

@@ -29,6 +29,7 @@ export const CENTRAL_YARD_PROFILE: Profile = {
     { id: 'T3', maxBhMpd: 50 },
   ],
   useMix: true,
+  mixTarget: { officeShare: 0.43, retailShare: 0.57 },
   minPosM2: 28750,
   minParking: null,
   sourceNote: 'Central Yard development limits — Office:Retail ≈ 43:57',

@@ -343,30 +343,34 @@ body {
   background: var(--color-bg-secondary);
   border-radius: 6px;
   border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .height-input-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .height-input-row label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-secondary);
   white-space: nowrap;
+  min-width: 24px;
 }
 
 .height-input-row input {
-  width: 80px;
-  padding: 5px 8px;
+  width: 70px;
+  padding: 4px 6px;
   border: 1px solid var(--color-border);
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .height-input-row span {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-secondary);
 }
 

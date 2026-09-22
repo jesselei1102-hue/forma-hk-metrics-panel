@@ -1,4 +1,4 @@
-import type { MetricRow, Profile, AreaMetricsData, StatusThresholds } from './types';
+import type { MetricRow, Profile, AreaMetricsData, StatusThresholds, TowerHeights, FunctionGfa } from './types';
 
 function calculateStatus(
   usagePercent: number | null,
@@ -10,11 +10,34 @@ function calculateStatus(
   return 'red';
 }
 
+function matchesOffice(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.includes('office') || lower.includes('办公');
+}
+
+function matchesRetail(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.includes('retail') || lower.includes('commercial') || lower.includes('零售') || lower.includes('商业');
+}
+
+function extractMixGfa(breakdown: FunctionGfa[]): { office: number | null; retail: number | null } {
+  let office: number | null = null;
+  let retail: number | null = null;
+  for (const fn of breakdown) {
+    if (matchesOffice(fn.functionName)) {
+      office = (office ?? 0) + fn.value;
+    } else if (matchesRetail(fn.functionName)) {
+      retail = (retail ?? 0) + fn.value;
+    }
+  }
+  return { office, retail };
+}
+
 export function calculateMetrics(
   areaData: AreaMetricsData,
   profile: Profile,
   thresholds: StatusThresholds,
-  manualRoofMpd: number | null
+  towerHeights: TowerHeights
 ): MetricRow[] {
   const metrics: MetricRow[] = [];
 
@@ -86,20 +109,67 @@ export function calculateMetrics(
     status: calculateStatus(scUsage, thresholds),
   });
 
-  if (profile.towers.length > 0) {
-    const primaryTower = profile.towers[0];
-    const heightLimit = primaryTower.maxBhMpd;
+  for (const tower of profile.towers) {
+    const heightStr = towerHeights[tower.id];
+    const heightActual = heightStr ? parseFloat(heightStr) : null;
+    const parsedHeight = heightActual !== null && Number.isFinite(heightActual) ? heightActual : null;
+    const heightLimit = tower.maxBhMpd;
     const heightUsage =
-      manualRoofMpd !== null && heightLimit > 0
-        ? (manualRoofMpd / heightLimit) * 100
+      parsedHeight !== null && heightLimit > 0
+        ? (parsedHeight / heightLimit) * 100
         : null;
     metrics.push({
-      name: `Height (${primaryTower.id})`,
-      nameZh: `高度 (${primaryTower.id})`,
-      actual: manualRoofMpd,
+      name: `Height (${tower.id})`,
+      nameZh: `高度 (${tower.id})`,
+      actual: parsedHeight,
       limit: heightLimit,
       usagePercent: heightUsage,
       status: calculateStatus(heightUsage, thresholds),
+    });
+  }
+
+  if (profile.useMix || profile.mixTarget) {
+    const { office: officeGfa, retail: retailGfa } = extractMixGfa(areaData.functionBreakdown);
+    const mixTarget = profile.mixTarget;
+
+    const officeTargetGfa = mixTarget && gfaActual !== null ? gfaActual * mixTarget.officeShare : null;
+    const retailTargetGfa = mixTarget && gfaActual !== null ? gfaActual * mixTarget.retailShare : null;
+
+    const officeUsage =
+      officeGfa !== null && officeTargetGfa !== null && officeTargetGfa > 0
+        ? (officeGfa / officeTargetGfa) * 100
+        : null;
+    metrics.push({
+      name: 'Office GFA',
+      nameZh: '办公面积',
+      actual: officeGfa,
+      limit: officeTargetGfa,
+      usagePercent: officeUsage,
+      status: 'none',
+    });
+
+    const retailUsage =
+      retailGfa !== null && retailTargetGfa !== null && retailTargetGfa > 0
+        ? (retailGfa / retailTargetGfa) * 100
+        : null;
+    metrics.push({
+      name: 'Retail GFA',
+      nameZh: '零售面积',
+      actual: retailGfa,
+      limit: retailTargetGfa,
+      usagePercent: retailUsage,
+      status: 'none',
+    });
+  }
+
+  if (profile.minPosM2 !== null && profile.minPosM2 !== undefined) {
+    metrics.push({
+      name: 'POS Area',
+      nameZh: '公共空间',
+      actual: null,
+      limit: profile.minPosM2,
+      usagePercent: null,
+      status: 'none',
     });
   }
 

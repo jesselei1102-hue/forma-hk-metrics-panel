@@ -1,5 +1,5 @@
 import { Forma } from 'forma-embedded-view-sdk/auto';
-import type { AreaMetricsData } from './types';
+import type { AreaMetricsData, FunctionGfa } from './types';
 
 function extractValue(val: number | 'UNABLE_TO_CALCULATE' | undefined): number | null {
   if (val === undefined || val === 'UNABLE_TO_CALCULATE') return null;
@@ -7,27 +7,47 @@ function extractValue(val: number | 'UNABLE_TO_CALCULATE' | undefined): number |
   return val;
 }
 
-function sumFunctionBreakdown(
-  breakdown: Array<{ value: number | 'UNABLE_TO_CALCULATE' }> | undefined
-): number | null {
-  if (!breakdown || breakdown.length === 0) return null;
+function extractFunctionBreakdown(
+  breakdown: Array<{ functionName: string; value: number | 'UNABLE_TO_CALCULATE' }> | undefined
+): { total: number | null; functions: FunctionGfa[] } {
+  if (!breakdown || breakdown.length === 0) {
+    return { total: null, functions: [] };
+  }
   let sum = 0;
   let hasValue = false;
+  const functions: FunctionGfa[] = [];
   for (const item of breakdown) {
     const val = extractValue(item.value);
     if (val !== null) {
       sum += val;
       hasValue = true;
+      functions.push({ functionName: item.functionName, value: val });
     }
   }
-  return hasValue ? sum : null;
+  return { total: hasValue ? sum : null, functions };
+}
+
+async function getBuildingPaths(): Promise<string[]> {
+  try {
+    const buildingsPaths = await Forma.geometry.getPathsByCategory({ category: 'buildings' });
+    if (buildingsPaths.length > 0) return buildingsPaths;
+  } catch {
+    // buildings category not available
+  }
+  try {
+    const buildingPaths = await Forma.geometry.getPathsByCategory({ category: 'building' });
+    if (buildingPaths.length > 0) return buildingPaths;
+  } catch {
+    // building category not available
+  }
+  return [];
 }
 
 export async function fetchAreaMetrics(): Promise<AreaMetricsData> {
   try {
     const [sitePaths, buildingPaths] = await Promise.all([
       Forma.geometry.getPathsByCategory({ category: 'site_limit' }),
-      Forma.geometry.getPathsByCategory({ category: 'building' }),
+      getBuildingPaths(),
     ]);
 
     const siteMetricsPromise =
@@ -49,13 +69,16 @@ export async function fetchAreaMetrics(): Promise<AreaMetricsData> {
       ? extractValue(siteMetrics.builtInMetrics.siteArea?.value)
       : null;
 
-    const gfa = sumFunctionBreakdown(buildingMetrics.builtInMetrics.grossFloorArea.functionBreakdown);
+    const { total: gfa, functions: functionBreakdown } = extractFunctionBreakdown(
+      buildingMetrics.builtInMetrics.grossFloorArea.functionBreakdown
+    );
     const buildingCoverage = extractValue(buildingMetrics.builtInMetrics.buildingCoverage?.value);
 
     return {
       siteArea,
       grossFloorArea: gfa,
-      buildingCoverage: buildingCoverage,
+      buildingCoverage,
+      functionBreakdown,
     };
   } catch (error) {
     console.error('Error fetching area metrics:', error);
@@ -63,6 +86,7 @@ export async function fetchAreaMetrics(): Promise<AreaMetricsData> {
       siteArea: null,
       grossFloorArea: null,
       buildingCoverage: null,
+      functionBreakdown: [],
     };
   }
 }

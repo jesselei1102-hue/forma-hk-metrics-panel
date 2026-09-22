@@ -3,6 +3,11 @@ export interface TowerLimit {
   maxBhMpd: number;
 }
 
+export interface MixTarget {
+  officeShare: number;
+  retailShare: number;
+}
+
 export interface Profile {
   id: string;
   projectName: string;
@@ -13,16 +18,25 @@ export interface Profile {
   gfMpd: number;
   towers: TowerLimit[];
   useMix?: boolean;
+  mixTarget?: MixTarget;
   minPosM2?: number | null;
   minParking?: number | null;
   sourceNote?: string;
+}
+
+export interface FunctionGfa {
+  functionName: string;
+  value: number;
 }
 
 export interface AreaMetricsData {
   siteArea: number | null;
   grossFloorArea: number | null;
   buildingCoverage: number | null;
+  functionBreakdown: FunctionGfa[];
 }
+
+export type TowerHeights = Record<string, string>;
 
 export interface MetricRow {
   name: string;
