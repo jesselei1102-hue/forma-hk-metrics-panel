@@ -13,6 +13,10 @@ export const BLANK_PROFILE: Profile = {
   minPosM2: null,
   minParking: null,
   sourceNote: 'User-defined blank profile',
+  siteClass: null,
+  useType: null,
+  buildingHeightM: null,
+  domesticShare: null,
 };
 
 export const CENTRAL_YARD_PROFILE: Profile = {
@@ -35,6 +39,10 @@ export const CENTRAL_YARD_PROFILE: Profile = {
   minPosM2: 28750,
   minParking: null,
   sourceNote: 'Central Yard development limits — Office:Retail ≈ 43:57',
+  siteClass: null,
+  useType: null,
+  buildingHeightM: null,
+  domesticShare: null,
 };
 
 export const DEFAULT_PROFILES: Profile[] = [BLANK_PROFILE, CENTRAL_YARD_PROFILE];
@@ -73,6 +81,20 @@ function migrateLegacyMixTarget(profile: Profile): Profile {
   return profile;
 }
 
+function migrateBprFields(profile: Profile): Profile {
+  return {
+    ...profile,
+    siteClass: profile.siteClass ?? null,
+    useType: profile.useType ?? null,
+    buildingHeightM: profile.buildingHeightM ?? null,
+    domesticShare: profile.domesticShare ?? null,
+  };
+}
+
+function migrateProfile(profile: Profile): Profile {
+  return migrateBprFields(migrateLegacyMixTarget(profile));
+}
+
 export function loadProfiles(): Profile[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -81,8 +103,8 @@ export function loadProfiles(): Profile[] {
       const defaultIds = DEFAULT_PROFILES.map((p) => p.id);
       const customProfiles = parsed
         .filter((p) => !defaultIds.includes(p.id))
-        .map(migrateLegacyMixTarget);
-      return [...DEFAULT_PROFILES, ...customProfiles.map(migrateLegacyMixTarget)];
+        .map(migrateProfile);
+      return [...DEFAULT_PROFILES, ...customProfiles];
     }
   } catch {
     console.warn('Failed to load profiles from localStorage');

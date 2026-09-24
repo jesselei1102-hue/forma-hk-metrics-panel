@@ -3,6 +3,80 @@
 A Forma Site Design extension that displays early/pre-design planning metrics for Hong Kong developments. The panel reads Forma `areaMetrics`, compares against hand-entered profile limits, and shows traffic-light status with deltas.
 
 
+## Cap. 123 / Cap. 123F Integration
+
+The panel supports **dual-limit comparison** for Plot Ratio and Site Coverage:
+
+### Profile Limits (OZP / Lease / Brief)
+Your existing profile limits from OZP zoning, lease conditions, or project briefs remain the **primary** reference. These are manually entered in the Profile Editor.
+
+### B(P)R First Schedule Limits (Cap. 123F)
+Cap. 123F Building (Planning) Regulations First Schedule defines **statutory intensity ceilings** based on:
+- **Site Class** (per reg 18A — number of streets the site abuts):
+  - **Class A**: 1 street (least permissive for domestic)
+  - **Class B**: 2 streets
+  - **Class C**: 3+ streets (most permissive)
+- **Use Type** (domestic or non-domestic)
+- **Building Height** in metres (NOT mPD)
+
+When you set all three in the Profile Editor, the panel will:
+1. Look up the corresponding First Schedule limits
+2. Show both Profile (P) and B(P)R (B) limits for PR and SC
+3. Highlight the **stricter** limit and compute status against it
+
+### Building Height Derivation
+
+The panel can derive building height for First Schedule lookup in two ways:
+
+1. **From tower mPD inputs** (automatic):
+   - Formula: `buildingHeightM = max(tower roof mPD) - gfMpd`
+   - Uses the tallest tower as the governing height
+   - Requires: towers defined in profile, tower mPD values entered, gfMpd > 0
+   - Shows which tower is governing in the B(P)R status panel
+
+2. **Manual override**:
+   - Set "Building Height Override (m)" in Profile Editor
+   - Takes precedence over auto-derived height
+   - Use when actual building height differs from mPD calculation
+
+### Composite Buildings (reg 21(2))
+
+For composite buildings (mixed domestic/non-domestic use), **reg 21(2) constrains the domestic PR** based on how much non-domestic PR is actually used:
+
+```
+PR_dom_max = (PR_nd_permitted - PR_nd_actual) × (PR_dom_permitted / PR_nd_permitted)
+```
+
+This is **NOT** a simple weighted average. The actual permissible domestic PR depends on how much of the non-domestic allowance is consumed.
+
+**For early design** (before final GFA split is known), the panel shows:
+- Permitted domestic PR and non-domestic PR from the schedule
+- An **indicative blended PR** using the entered domestic share %
+- The stricter SC (min of domestic/non-domestic)
+
+This indicative blend is clearly labeled as **not the reg 21(2) formula** — actual compliance depends on the specific GFA split at BA submission.
+
+To use composite mode:
+1. Set **Use Type** to "Composite (mixed)"
+2. Enter **Domestic GFA Share %** (0-100) for indicative blend
+3. Review both permitted PR values and the indicative total
+
+Example: Class A >61m with 60% domestic:
+- Permitted PR_dom = 8.0, PR_nd = 15
+- Indicative blend = 0.6×8 + 0.4×15 = 10.8
+- SC = min(33.33%, 60%) = 33.33%
+
+### Important Notes
+
+- **Building height** is in **metres of building**, not mPD (metres Principal Datum). Tower mPD limits in the profile are for height compliance; First Schedule uses building height.
+- **Forma GFA ≠ BD GFA**: Forma's gross floor area is modelling area, not Buildings Department accountable GFA under B(P)R reg 23 / PNAP APP-2. GFA concessions, exclusions, and bonus provisions are not applied.
+- Traffic lights indicate **indicative** compliance only — never interpret a green light as Cap. 123 statutory approval.
+- **OZP mPD checks** remain separate from First Schedule — tower height compliance uses mPD, intensity caps use metres.
+
+### Official Sources
+- [Cap. 123F Building (Planning) Regulations](https://www.elegislation.gov.hk/hk/cap123F)
+- [HKLII Cap. 123F First Schedule](https://hklii.hk/en/legis/reg/123F/sch1)
+
 ## Features
 
 - **Profile Management**: Select from built-in profiles (Central Yard, Blank) or create custom profiles
@@ -164,19 +238,28 @@ forma-hk-metrics-panel/
 Custom profiles follow this structure:
 
 ```typescript
+type SiteClass = 'A' | 'B' | 'C';
+type UseType = 'domestic' | 'non-domestic' | 'composite';
+
 interface Profile {
   id: string;              // Unique identifier
   projectName: string;     // Display name
   siteAreaM2: number | null;    // Site area limit (m²)
   maxGfaM2: number | null;      // Max GFA limit (m²)
-  maxPr: number | null;         // Max plot ratio
-  maxSc: number | null;         // Max site coverage (0-1)
-  gfMpd: number;                // Ground floor mPD
-  towers: TowerLimit[];         // Tower height limits
-  useMix?: boolean;             // Use mix tracking (P1)
+  maxPr: number | null;         // Max plot ratio (OZP/lease)
+  maxSc: number | null;         // Max site coverage 0-1 (OZP/lease)
+  gfMpd: number;                // Ground floor mPD (for height derivation)
+  towers: TowerLimit[];         // Tower height limits (mPD)
+  mixTargets?: MixTargetEntry[]; // GFA mix targets
   minPosM2?: number | null;     // Min POS area (m²)
   minParking?: number | null;   // Min parking spots
   sourceNote?: string;          // Reference note
+
+  // B(P)R First Schedule fields (optional)
+  siteClass?: SiteClass | null;      // B(P)R reg 18A site class (A/B/C)
+  useType?: UseType | null;          // Domestic / non-domestic / composite
+  buildingHeightM?: number | null;   // Manual override: building height in metres
+  domesticShare?: number | null;     // For composite: domestic GFA share (0-1)
 }
 
 interface TowerLimit {

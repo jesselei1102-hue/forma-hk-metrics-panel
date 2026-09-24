@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'preact/hooks';
-import type { Profile, TowerLimit, MixTargetEntry } from '../types';
+import type { Profile, TowerLimit, MixTargetEntry, SiteClass, UseType } from '../types';
 
 interface Props {
   profile: Profile;
@@ -214,6 +214,94 @@ export function ProfileEditor({ profile, onSave, onCancel, isNew = false }: Prop
                 }
               />
             </div>
+          </div>
+
+          <div class="form-group bpr-section">
+            <label class="form-label">B(P)R First Schedule (optional)</label>
+            <div class="bpr-hint">
+              Set these to see Cap. 123F statutory intensity caps alongside profile limits.
+              Building height auto-derives from tower mPD inputs, or set manual override below.
+            </div>
+            <div class="form-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <div class="form-group" style={{ marginBottom: 0 }}>
+                <label class="form-label-sm">Site Class (reg 18A)</label>
+                <select
+                  class="form-input"
+                  value={formData.siteClass ?? ''}
+                  onChange={(e) => {
+                    const val = (e.target as HTMLSelectElement).value;
+                    handleChange('siteClass', val === '' ? null : val as SiteClass);
+                  }}
+                >
+                  <option value="">— Not set —</option>
+                  <option value="A">Class A (urban)</option>
+                  <option value="B">Class B (intermediate)</option>
+                  <option value="C">Class C (low density)</option>
+                </select>
+              </div>
+              <div class="form-group" style={{ marginBottom: 0 }}>
+                <label class="form-label-sm">Use Type</label>
+                <select
+                  class="form-input"
+                  value={formData.useType ?? ''}
+                  onChange={(e) => {
+                    const val = (e.target as HTMLSelectElement).value;
+                    handleChange('useType', val === '' ? null : val as UseType);
+                  }}
+                >
+                  <option value="">— Not set —</option>
+                  <option value="domestic">Domestic</option>
+                  <option value="non-domestic">Non-domestic</option>
+                  <option value="composite">Composite (mixed)</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row" style={{ gridTemplateColumns: '1fr 1fr', marginTop: '8px' }}>
+              <div class="form-group" style={{ marginBottom: 0 }}>
+                <label class="form-label-sm">Building Height Override (m)</label>
+                <input
+                  class="form-input"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={formData.buildingHeightM ?? ''}
+                  onInput={(e) =>
+                    handleChange('buildingHeightM', parseNumber((e.target as HTMLInputElement).value))
+                  }
+                  placeholder="Auto from towers"
+                />
+              </div>
+              {formData.useType === 'composite' && (
+                <div class="form-group" style={{ marginBottom: 0 }}>
+                  <label class="form-label-sm">Domestic GFA Share (%)</label>
+                  <input
+                    class="form-input"
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="100"
+                    value={formData.domesticShare !== null && formData.domesticShare !== undefined
+                      ? Math.round(formData.domesticShare * 100)
+                      : ''}
+                    onInput={(e) => {
+                      const pct = parseNumber((e.target as HTMLInputElement).value);
+                      handleChange('domesticShare', pct !== null ? Math.max(0, Math.min(100, pct)) / 100 : null);
+                    }}
+                    placeholder="e.g. 60"
+                  />
+                </div>
+              )}
+            </div>
+            {formData.useType === 'composite' && (
+              <div class="bpr-composite-info">
+                <strong>Note:</strong> Reg 21(2) constrains domestic PR based on actual non-domestic usage — 
+                not a simple weighted average. The panel shows an indicative blend for early design; 
+                actual compliance depends on the specific GFA split at BA submission.
+                {formData.domesticShare === null || formData.domesticShare === undefined
+                  ? ' Set domestic share % for indicative blend.'
+                  : ` Indicative: ${Math.round((formData.domesticShare ?? 0) * 100)}% dom. / ${Math.round((1 - (formData.domesticShare ?? 0)) * 100)}% non-dom.`}
+              </div>
+            )}
           </div>
 
           <div class="form-group">

@@ -15,6 +15,9 @@ export interface LegacyMixTarget {
   retailShare: number;
 }
 
+export type SiteClass = 'A' | 'B' | 'C';
+export type UseType = 'domestic' | 'non-domestic' | 'composite';
+
 export interface Profile {
   id: string;
   projectName: string;
@@ -30,6 +33,28 @@ export interface Profile {
   minPosM2?: number | null;
   minParking?: number | null;
   sourceNote?: string;
+  /** B(P)R First Schedule site class (reg 18A) */
+  siteClass?: SiteClass | null;
+  /** B(P)R use classification for First Schedule lookup */
+  useType?: UseType | null;
+  /**
+   * Manual building height override in metres (NOT mPD) for First Schedule bands.
+   * If null/undefined, derived from max(tower roof mPD) - gfMpd.
+   */
+  buildingHeightM?: number | null;
+  /**
+   * For composite use: domestic GFA share (0-1).
+   * Used to calculate weighted composite PR/SC limits.
+   * If null, user must set explicitly or pick domestic/non-domestic.
+   */
+  domesticShare?: number | null;
+}
+
+/** Derived building height info for UI display */
+export interface DerivedBuildingHeight {
+  heightM: number;
+  source: 'manual' | 'derived';
+  governingTowerId?: string;
 }
 
 export interface FunctionGfa {
@@ -53,6 +78,8 @@ export interface AreaMetricsData {
 
 export type TowerHeights = Record<string, string>;
 
+export type LimitSource = 'profile' | 'bpr' | 'stricter';
+
 export interface MetricRow {
   name: string;
   actual: number | null;
@@ -60,6 +87,14 @@ export interface MetricRow {
   usagePercent: number | null;
   status: 'green' | 'yellow' | 'red' | 'none';
   customMetricId?: string;
+  /** Profile-defined limit (OZP / lease / brief) */
+  profileLimit?: number | null;
+  /** B(P)R First Schedule limit when available */
+  bprLimit?: number | null;
+  /** Label for B(P)R limit (e.g. "Class A ≤61m") */
+  bprBandLabel?: string | null;
+  /** Which limit is effective / stricter */
+  limitSource?: LimitSource | null;
 }
 
 export type StatusThresholds = {
