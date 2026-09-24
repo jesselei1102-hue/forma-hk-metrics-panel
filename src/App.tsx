@@ -463,65 +463,10 @@ export function App() {
 
       {error && <div class="error">{error}</div>}
 
-      <div class="gfa-disclaimer">
-        <strong>Early Design Aid</strong> — Forma GFA is modelling area, not Buildings Department
-        accountable GFA (B(P)R reg 23 / PNAP APP-2). Traffic lights compare against profile and/or
-        indicative B(P)R First Schedule caps only. Not a Cap. 123 statutory compliance check.
-      </div>
-
       {loading ? (
         <div class="loading">Loading metrics...</div>
       ) : (
         <>
-          {!bprStatus.isReady && (
-            <div class="bpr-status-panel">
-              <div class="bpr-status-header">
-                <span class="bpr-status-icon">📋</span>
-                <span>B(P)R First Schedule</span>
-              </div>
-              <div class="bpr-status-missing">
-                {bprStatus.missing.map((field) => (
-                  <div class="bpr-missing-item" key={field}>
-                    <span class="missing-check">☐</span>
-                    <span>{field}</span>
-                  </div>
-                ))}
-              </div>
-              <div class="bpr-status-hint">
-                {bprStatus.hint}
-              </div>
-            </div>
-          )}
-
-          {bprStatus.isReady && bprResult && (
-            <div class="bpr-active-panel">
-              <div class="bpr-active-header">
-                <span class="bpr-status-icon">✓</span>
-                <span>B(P)R First Schedule Active</span>
-              </div>
-              <div class="bpr-active-info">
-                <span class="bpr-band">{bprResult.bandLabel}</span>
-                {derivedHeight && derivedHeight.source === 'derived' && derivedHeight.governingTowerId && (
-                  <span class="bpr-derived">
-                    Height from {derivedHeight.governingTowerId}: {derivedHeight.heightM.toFixed(1)}m
-                  </span>
-                )}
-                {derivedHeight && derivedHeight.source === 'manual' && (
-                  <span class="bpr-derived">Manual height: {derivedHeight.heightM.toFixed(1)}m</span>
-                )}
-              </div>
-              {bprResult.isComposite && (
-                <div class="bpr-composite-detail">
-                  <div>Indicative PR: {bprResult.maxPr} (permitted dom. {bprResult.domesticPr} / non-dom. {bprResult.nonDomesticPr})</div>
-                  <div>SC: {(bprResult.maxSc * 100).toFixed(1)}% (dom. {((bprResult.domesticSc ?? 0) * 100).toFixed(1)}% / non-dom. {((bprResult.nonDomesticSc ?? 0) * 100).toFixed(1)}%)</div>
-                  {bprResult.compositeNote && (
-                    <div class="bpr-composite-note">{bprResult.compositeNote}</div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
           <MetricsTable
             metrics={visibleMetrics}
             liveSiteArea={areaMetrics?.siteArea}
@@ -565,6 +510,61 @@ export function App() {
         <div class="error">
           <strong>Development Mode:</strong> Metrics will be populated when loaded inside Autodesk
           Forma. See README for setup instructions.
+        </div>
+      )}
+
+      <div class="gfa-disclaimer">
+        <strong>Early Design Aid</strong> — Forma GFA is modelling area, not Buildings Department
+        accountable GFA (B(P)R reg 23 / PNAP APP-2). Traffic lights compare against profile and/or
+        indicative B(P)R First Schedule caps only. Not a Cap. 123 statutory compliance check.
+      </div>
+
+      {!loading && !bprStatus.isReady && (
+        <div class="bpr-status-panel">
+          <div class="bpr-status-header">
+            <span class="bpr-status-icon">📋</span>
+            <span>B(P)R First Schedule</span>
+          </div>
+          <div class="bpr-status-missing">
+            {bprStatus.missing.map((field) => (
+              <div class="bpr-missing-item" key={field}>
+                <span class="missing-check">☐</span>
+                <span>{field}</span>
+              </div>
+            ))}
+          </div>
+          <div class="bpr-status-hint">
+            {bprStatus.hint}
+          </div>
+        </div>
+      )}
+
+      {!loading && bprStatus.isReady && bprResult && (
+        <div class="bpr-active-panel">
+          <div class="bpr-active-header">
+            <span class="bpr-status-icon">✓</span>
+            <span>B(P)R First Schedule Active</span>
+          </div>
+          <div class="bpr-active-info">
+            <span class="bpr-band">{bprResult.bandLabel}</span>
+            {derivedHeight && derivedHeight.source === 'derived' && derivedHeight.governingTowerId && (
+              <span class="bpr-derived">
+                Height from {derivedHeight.governingTowerId}: {derivedHeight.heightM.toFixed(1)}m
+              </span>
+            )}
+            {derivedHeight && derivedHeight.source === 'manual' && (
+              <span class="bpr-derived">Manual height: {derivedHeight.heightM.toFixed(1)}m</span>
+            )}
+          </div>
+          {bprResult.isComposite && (
+            <div class="bpr-composite-detail">
+              <div>Indicative PR: {bprResult.maxPr} (permitted dom. {bprResult.domesticPr} / non-dom. {bprResult.nonDomesticPr})</div>
+              <div>SC: {(bprResult.maxSc * 100).toFixed(1)}% (dom. {((bprResult.domesticSc ?? 0) * 100).toFixed(1)}% / non-dom. {((bprResult.nonDomesticSc ?? 0) * 100).toFixed(1)}%)</div>
+              {bprResult.compositeNote && (
+                <div class="bpr-composite-note">{bprResult.compositeNote}</div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
