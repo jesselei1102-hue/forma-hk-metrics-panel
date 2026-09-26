@@ -73,16 +73,57 @@ function migrateLegacyMixTarget(profile: Profile): Profile {
   return profile;
 }
 
+function isProfile(value: unknown): value is Profile {
+  return !!value && typeof value === 'object' && typeof (value as Profile).id === 'string';
+}
+
+// Built-in profiles are editable in the panel. Keep those edits, and fill any
+// fields missing from older saves from the shipped defaults.
+function mergeStoredDefault(defaultProfile: Profile, stored: Profile): Profile {
+  const migrated = migrateLegacyMixTarget(stored);
+  const userSetMixTargets =
+    Object.prototype.hasOwnProperty.call(stored, 'mixTargets') || stored.mixTarget != null;
+  const mixTargets = userSetMixTargets
+    ? Array.isArray(migrated.mixTargets)
+      ? migrated.mixTargets
+      : []
+    : defaultProfile.mixTargets;
+
+  return {
+    ...defaultProfile,
+    ...migrated,
+    id: defaultProfile.id,
+    towers: Array.isArray(migrated.towers) ? migrated.towers : defaultProfile.towers,
+    mixTargets,
+  };
+}
+
 export function loadProfiles(): Profile[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      const parsed = JSON.parse(stored) as Profile[];
-      const defaultIds = DEFAULT_PROFILES.map((p) => p.id);
-      const customProfiles = parsed
-        .filter((p) => !defaultIds.includes(p.id))
-        .map(migrateLegacyMixTarget);
-      return [...DEFAULT_PROFILES, ...customProfiles.map(migrateLegacyMixTarget)];
+      const parsed = JSON.parse(stored) as unknown;
+      if (Array.isArray(parsed)) {
+        const defaultIds = new Set(DEFAULT_PROFILES.map((p) => p.id));
+        const storedById = new Map<string, Profile>();
+        const customProfiles: Profile[] = [];
+
+        for (const entry of parsed) {
+          if (!isProfile(entry)) continue;
+          if (defaultIds.has(entry.id)) {
+            storedById.set(entry.id, entry);
+          } else {
+            customProfiles.push(migrateLegacyMixTarget(entry));
+          }
+        }
+
+        const defaults = DEFAULT_PROFILES.map((defaultProfile) => {
+          const saved = storedById.get(defaultProfile.id);
+          return saved ? mergeStoredDefault(defaultProfile, saved) : defaultProfile;
+        });
+
+        return [...defaults, ...customProfiles];
+      }
     }
   } catch {
     console.warn('Failed to load profiles from localStorage');
